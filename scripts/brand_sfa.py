@@ -18,6 +18,11 @@ gradle = app / "build.gradle.kts"
 text = gradle.read_text(encoding="utf-8")
 text = text.replace('applicationId = "io.nekohasekai.sfa"', 'applicationId = "com.pvnetwork.vpn"')
 text = text.replace('base.archivesName.set("SFA-${versionName}")', 'base.archivesName.set("PVNetwork-VPN-${versionName}")')
+# GitHub-hosted Android SDK currently exposes stable API 36; keep the client
+# Play-compatible while avoiding unreleased API 37 compile dependencies.
+text = text.replace("compileSdk = 37", "compileSdk = 36")
+text = text.replace("    compileSdkMinor = 1\n", "")
+text = text.replace("targetSdk = 37", "targetSdk = 36")
 gradle.write_text(text, encoding="utf-8")
 
 drawable = app / "src/main/res/drawable-nodpi"
