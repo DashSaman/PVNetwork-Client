@@ -1,27 +1,23 @@
 plugins {
-    id 'com.android.application'
+    id 'base'
 }
 
-android {
-    namespace 'com.pvnetwork.vpn'
-    compileSdk 35
+tasks.register('assembleDebug', Exec) {
+    group = 'build'
+    description = 'Build the real PVNetwork Android client from pinned SFA/sing-box sources.'
+    workingDir rootProject.projectDir
+    commandLine 'bash', 'scripts/build_real_android.sh'
 
-    defaultConfig {
-        applicationId 'com.pvnetwork.vpn'
-        minSdk 24
-        targetSdk 35
-        versionCode 2
-        versionName '0.2.0'
-    }
-
-    buildTypes {
-        release {
-            minifyEnabled false
+    doLast {
+        def outputDir = file("${buildDir}/outputs/apk/debug")
+        outputDir.mkdirs()
+        copy {
+            from rootProject.file('dist/PVNetwork-VPN-v0.3-android5plus-legacy-universal.apk')
+            into outputDir
+            rename { 'app-debug.apk' }
         }
-    }
-
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
+        if (!new File(outputDir, 'app-debug.apk').exists()) {
+            throw new GradleException('PVNetwork real APK was not produced')
+        }
     }
 }
