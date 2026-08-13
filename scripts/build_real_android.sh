@@ -23,13 +23,16 @@ python3 "$ROOT/scripts/brand_sfa.py" "$BUILD/sing-box-for-android" "$ASSETS/priv
 command -v go
 go version
 export GOTOOLCHAIN=auto
+export PATH="$(go env GOPATH)/bin:$PATH"
 
 yes | sdkmanager --licenses >/dev/null || true
 sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;28.0.13004108"
 
 go install github.com/sagernet/gomobile/cmd/gomobile@v0.1.12
 go install github.com/sagernet/gomobile/cmd/gobind@v0.1.12
-"$(go env GOPATH)/bin/gomobile" init
+command -v gomobile
+command -v gobind
+gomobile init
 
 (
   cd "$BUILD/sing-box"
