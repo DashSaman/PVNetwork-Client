@@ -8,7 +8,6 @@ ASSETS="$ROOT/_build_assets"
 rm -rf "$BUILD" "$DIST" "$ASSETS"
 mkdir -p "$BUILD" "$DIST" "$ASSETS"
 
-# Exact PVNetwork artwork is versioned in the pvnetwork-v0.3 branch.
 curl -L --fail --retry 3 \
   https://raw.githubusercontent.com/DashSaman/PVNetwork-Client/pvnetwork-v0.3/branding/private-network-logo.jpg \
   -o "$ASSETS/private-network-logo.jpg"
@@ -26,7 +25,7 @@ go version
 export GOTOOLCHAIN=auto
 
 yes | sdkmanager --licenses >/dev/null || true
-sdkmanager "platform-tools" "platforms;android-37" "build-tools;37.0.0" "ndk;28.0.13004108"
+sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;28.0.13004108"
 
 go install github.com/sagernet/gomobile/cmd/gomobile@v0.1.12
 go install github.com/sagernet/gomobile/cmd/gobind@v0.1.12
@@ -58,6 +57,7 @@ PVNetwork VPN V0.3
 Application ID: com.pvnetwork.vpn
 SFA: 0a401b69b63d5bc40be5c018baa117a04eeb26a1
 sing-box: v1.13.18
+compileSdk/targetSdk: 36
 Standard minSdk: 23
 Legacy minSdk: 21
 Universal ABIs: armeabi-v7a, arm64-v8a, x86, x86_64
