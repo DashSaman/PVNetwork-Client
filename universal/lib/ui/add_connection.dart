@@ -33,9 +33,9 @@ Future<void> showAddConnection(BuildContext context, PVController controller) as
             Navigator.pop(sheetContext);
             showManualDialog(context, controller);
           }),
-          _Tile(Icons.qr_code_scanner, 'Scan QR', 'Camera scanner is enabled after the platform permission pass', () {
+          _Tile(Icons.qr_code_scanner, 'Scan QR', 'Camera scanner follows the platform permission milestone', () {
             Navigator.pop(sheetContext);
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('QR camera adapter is not enabled in this development branch yet.')));
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('QR camera adapter is not enabled in this development build yet.')));
           }),
         ]),
       ),
@@ -77,18 +77,15 @@ Future<void> importClipboard(BuildContext context, PVController controller) asyn
 
 Future<void> importFile(BuildContext context, PVController controller) async {
   try {
-    final picked = await FilePicker.platform.pickFiles(
+    final picked = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: const ['ovpn', 'conf', 'json', 'yaml', 'yml', 'txt'],
-      withData: true,
     );
     if (picked == null || picked.files.isEmpty) return;
     final file = picked.files.single;
-    final raw = file.bytes != null
-        ? String.fromCharCodes(file.bytes!)
-        : file.path != null
-            ? await File(file.path!).readAsString()
-            : '';
+    final path = file.path;
+    if (path == null || path.isEmpty) throw const FormatException('The selected file path is unavailable.');
+    final raw = await File(path).readAsString();
     if (raw.trim().isEmpty) throw const FormatException('The selected file is empty or unreadable.');
     await controller.addRaw(raw, source: 'file:${file.extension ?? 'unknown'}');
     if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('File imported.')));
