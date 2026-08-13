@@ -1,14 +1,18 @@
 name: vpn
-description: PVNetwork Universal VPN Client foundation.
+description: PVNetwork client.
 publish_to: "none"
-version: 0.2.0+20
+version: 0.3.0+30
 
 environment:
-  sdk: ">=3.4.0 <4.0.0"
+  sdk: ">=3.7.0 <4.0.0"
 
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  flutter_secure_storage: 10.3.1
+  file_picker: 11.0.2
 
 flutter:
   uses-material-design: true
