@@ -1,0 +1,227 @@
+name: PVNetwork Universal Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'universal/**'
+      - '.github/workflows/universal-release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pvnetwork-universal-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  android:
+    name: Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate branded Android host
+        run: |
+          flutter create buildhost --org com.pvnetwork --project-name vpn --platforms=android --no-pub
+          rm -rf buildhost/lib
+          cp -R universal/lib buildhost/lib
+          cp universal/pubspec.yaml buildhost/pubspec.yaml
+          sed -i 's/android:label="vpn"/android:label="PVNetwork VPN"/' buildhost/android/app/src/main/AndroidManifest.xml
+      - name: Build release APK
+        working-directory: buildhost
+        run: |
+          flutter pub get
+          flutter build apk --release
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp buildhost/build/app/outputs/flutter-apk/app-release.apk dist/PVNetwork-VPN-Android.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pvnetwork-android
+          path: dist/PVNetwork-VPN-Android.apk
+          if-no-files-found: error
+
+  windows:
+    name: Windows x64
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate branded Windows host
+        shell: pwsh
+        run: |
+          flutter config --enable-windows-desktop
+          flutter create buildhost --org com.pvnetwork --project-name vpn --platforms=windows --no-pub
+          Remove-Item -Recurse -Force buildhost\lib
+          Copy-Item -Recurse universal\lib buildhost\lib
+          Copy-Item universal\pubspec.yaml buildhost\pubspec.yaml -Force
+          $main = Get-Content buildhost\windows\runner\main.cpp -Raw
+          $main = $main.Replace('L"vpn"', 'L"PVNetwork VPN"')
+          Set-Content buildhost\windows\runner\main.cpp $main
+          $rc = Get-Content buildhost\windows\runner\Runner.rc -Raw
+          $rc = $rc.Replace('"vpn"', '"PVNetwork VPN"')
+          Set-Content buildhost\windows\runner\Runner.rc $rc
+      - name: Build Windows release
+        shell: pwsh
+        working-directory: buildhost
+        run: |
+          flutter pub get
+          flutter build windows --release
+      - name: Package Windows
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Compress-Archive -Path buildhost\build\windows\x64\runner\Release\* -DestinationPath dist\PVNetwork-VPN-Windows-x64.zip -Force
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pvnetwork-windows
+          path: dist/PVNetwork-VPN-Windows-x64.zip
+          if-no-files-found: error
+
+  linux:
+    name: Linux x64
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate branded Linux host
+        run: |
+          flutter config --enable-linux-desktop
+          flutter create buildhost --org com.pvnetwork --project-name vpn --platforms=linux --no-pub
+          rm -rf buildhost/lib
+          cp -R universal/lib buildhost/lib
+          cp universal/pubspec.yaml buildhost/pubspec.yaml
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('buildhost/linux/runner/my_application.cc')
+          s=p.read_text()
+          s=s.replace('"vpn"', '"PVNetwork VPN"')
+          p.write_text(s)
+          PY
+      - name: Build Linux release
+        working-directory: buildhost
+        run: |
+          flutter pub get
+          flutter build linux --release
+      - name: Package Linux
+        run: |
+          mkdir -p dist
+          tar -C buildhost/build/linux/x64/release/bundle -czf dist/PVNetwork-VPN-Linux-x64.tar.gz .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pvnetwork-linux
+          path: dist/PVNetwork-VPN-Linux-x64.tar.gz
+          if-no-files-found: error
+
+  macos:
+    name: macOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate branded macOS host
+        run: |
+          flutter config --enable-macos-desktop
+          flutter create buildhost --org com.pvnetwork --project-name vpn --platforms=macos --no-pub
+          rm -rf buildhost/lib
+          cp -R universal/lib buildhost/lib
+          cp universal/pubspec.yaml buildhost/pubspec.yaml
+          sed -i '' 's/PRODUCT_NAME = vpn/PRODUCT_NAME = PVNetwork VPN/' buildhost/macos/Runner/Configs/AppInfo.xcconfig
+      - name: Build macOS release
+        working-directory: buildhost
+        run: |
+          flutter pub get
+          flutter build macos --release
+      - name: Package macOS app
+        run: |
+          mkdir -p dist
+          APP=$(find buildhost/build/macos/Build/Products/Release -maxdepth 1 -name '*.app' -print -quit)
+          test -n "$APP"
+          ditto -c -k --sequesterRsrc --keepParent "$APP" dist/PVNetwork-VPN-macOS.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pvnetwork-macos
+          path: dist/PVNetwork-VPN-macOS.zip
+          if-no-files-found: error
+
+  ios_unsigned:
+    name: iOS unsigned
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate branded iOS host
+        run: |
+          flutter create buildhost --org com.pvnetwork --project-name vpn --platforms=ios --no-pub
+          rm -rf buildhost/lib
+          cp -R universal/lib buildhost/lib
+          cp universal/pubspec.yaml buildhost/pubspec.yaml
+          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName PVNetwork VPN" buildhost/ios/Runner/Info.plist || true
+      - name: Build unsigned iOS app
+        working-directory: buildhost
+        run: |
+          flutter pub get
+          flutter build ios --release --no-codesign
+      - name: Package unsigned iOS app
+        run: |
+          mkdir -p dist
+          test -d buildhost/build/ios/iphoneos/Runner.app
+          ditto -c -k --sequesterRsrc --keepParent buildhost/build/ios/iphoneos/Runner.app dist/PVNetwork-VPN-iOS-Unsigned.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pvnetwork-ios-unsigned
+          path: dist/PVNetwork-VPN-iOS-Unsigned.zip
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs: [android, windows, linux, macos, ios_unsigned]
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: pvnetwork-*
+          path: dist
+          merge-multiple: true
+      - name: Create checksums
+        run: |
+          cd dist
+          sha256sum PVNetwork-* > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+      - name: Publish prerelease assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v0.2.0-alpha.${{ github.run_number }}
+          REPO: ${{ github.repository }}
+        run: |
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --repo "$REPO" --clobber
+          else
+            gh release create "$TAG" dist/* --repo "$REPO" --target "$GITHUB_SHA" --prerelease --title "PVNetwork VPN 0.2.0 Alpha ${{ github.run_number }}" --notes "Independent PVNetwork cross-platform foundation build. Download Android APK, Windows x64, Linux x64, macOS, or unsigned iOS app. The iOS asset is unsigned and is not a normal installable App Store/TestFlight IPA. VPN protocol engines are not enabled in this foundation build yet."
+          fi
