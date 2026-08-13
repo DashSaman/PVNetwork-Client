@@ -2,7 +2,7 @@ plugins {
     id 'base'
 }
 
-// PVNetwork V0.3 real engine build — stable Android API 36 gate.
+// PVNetwork V0.3 real engine build — stable Android API 36 gate #2.
 tasks.register('assembleDebug', Exec) {
     group = 'build'
     description = 'Build PVNetwork Android from pinned SFA/sing-box sources.'
