@@ -1,0 +1,10 @@
+*.apk
+*.aab
+*.jks
+*.keystore
+*.log
+build/
+dist/
+.env
+.env.*
+!.env.example
