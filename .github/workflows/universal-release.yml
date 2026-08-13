@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -32,8 +32,9 @@ jobs:
       - name: Generate Android host
         run: |
           flutter create buildhost --org com.pvnetwork --project-name vpn --platforms=android --no-pub
-          rm -rf buildhost/lib
+          rm -rf buildhost/lib buildhost/test
           cp -R universal/lib buildhost/lib
+          cp -R universal/test buildhost/test
           cp universal/pubspec.yaml buildhost/pubspec.yaml
           sed -i 's/android:label="vpn"/android:label="PVNetwork"/' buildhost/android/app/src/main/AndroidManifest.xml
       - name: Validate and build APK
@@ -41,6 +42,7 @@ jobs:
         run: |
           flutter pub get
           flutter analyze
+          flutter test
           flutter build apk --release
       - name: Package
         run: |
@@ -66,8 +68,9 @@ jobs:
         run: |
           flutter config --enable-windows-desktop
           flutter create buildhost --org com.pvnetwork --project-name vpn --platforms=windows --no-pub
-          Remove-Item -Recurse -Force buildhost\lib
+          Remove-Item -Recurse -Force buildhost\lib,buildhost\test
           Copy-Item -Recurse universal\lib buildhost\lib
+          Copy-Item -Recurse universal\test buildhost\test
           Copy-Item universal\pubspec.yaml buildhost\pubspec.yaml -Force
           $main = Get-Content buildhost\windows\runner\main.cpp -Raw
           $main = $main.Replace('L"vpn"', 'L"PVNetwork"')
@@ -78,6 +81,7 @@ jobs:
         run: |
           flutter pub get
           flutter analyze
+          flutter test
           flutter build windows --release
       - name: Package Windows
         shell: pwsh
@@ -107,14 +111,16 @@ jobs:
         run: |
           flutter config --enable-linux-desktop
           flutter create buildhost --org com.pvnetwork --project-name vpn --platforms=linux --no-pub
-          rm -rf buildhost/lib
+          rm -rf buildhost/lib buildhost/test
           cp -R universal/lib buildhost/lib
+          cp -R universal/test buildhost/test
           cp universal/pubspec.yaml buildhost/pubspec.yaml
       - name: Validate and build Linux
         working-directory: buildhost
         run: |
           flutter pub get
           flutter analyze
+          flutter test
           flutter build linux --release
       - name: Package Linux
         run: |
@@ -139,14 +145,16 @@ jobs:
         run: |
           flutter config --enable-macos-desktop
           flutter create buildhost --org com.pvnetwork --project-name vpn --platforms=macos --no-pub
-          rm -rf buildhost/lib
+          rm -rf buildhost/lib buildhost/test
           cp -R universal/lib buildhost/lib
+          cp -R universal/test buildhost/test
           cp universal/pubspec.yaml buildhost/pubspec.yaml
       - name: Validate and build macOS
         working-directory: buildhost
         run: |
           flutter pub get
           flutter analyze
+          flutter test
           flutter build macos --release
       - name: Package macOS
         run: |
@@ -172,8 +180,9 @@ jobs:
       - name: Generate iOS host
         run: |
           flutter create buildhost --org com.pvnetwork --project-name vpn --platforms=ios --no-pub
-          rm -rf buildhost/lib
+          rm -rf buildhost/lib buildhost/test
           cp -R universal/lib buildhost/lib
+          cp -R universal/test buildhost/test
           cp universal/pubspec.yaml buildhost/pubspec.yaml
           /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName PVNetwork" buildhost/ios/Runner/Info.plist || true
       - name: Validate and build unsigned iOS
@@ -181,6 +190,7 @@ jobs:
         run: |
           flutter pub get
           flutter analyze
+          flutter test
           flutter build ios --release --no-codesign
       - name: Package unsigned iOS
         run: |
@@ -192,5 +202,4 @@ jobs:
           path: dist/PVNetwork-iOS-Unsigned-dev.zip
           if-no-files-found: error
 
-# Intentionally no GitHub Release job here.
-# PROJECT_STATE requires at least one real, E2E-verified VPN adapter before a user-facing release is published.
+# No GitHub Release job before a real VPN adapter passes E2E.
