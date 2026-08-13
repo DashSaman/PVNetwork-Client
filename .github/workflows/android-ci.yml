@@ -12,7 +12,7 @@ on:
       - '.github/workflows/android-ci.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -43,3 +43,16 @@ jobs:
             PVNetwork-VPN-v0.2-dedicated-debug.apk
             SHA256SUMS.txt
           retention-days: 30
+      - name: Store APK in repository
+        run: |
+          mkdir -p releases/v0.2
+          cp PVNetwork-VPN-v0.2-dedicated-debug.apk releases/v0.2/
+          cp SHA256SUMS.txt releases/v0.2/
+          printf '%s\n' '# PVNetwork V0.2 Dedicated APK' '' 'Built automatically from the dedicated PVNetwork Android source.' '' 'Package: `com.pvnetwork.vpn`' '' 'This V0.2 build validates the independent UI, localization and config-import foundation. Tunnel engines are added in later protocol gates.' > releases/v0.2/README.md
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add releases/v0.2
+          if ! git diff --cached --quiet; then
+            git commit -m 'build: store PVNetwork V0.2 dedicated APK'
+            git push origin HEAD:main
+          fi
