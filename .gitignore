@@ -1,10 +1,9 @@
-*.apk
-*.aab
+.gradle/
+.idea/
+local.properties
+**/build/
+*.iml
 *.jks
 *.keystore
-*.log
-build/
-dist/
 .env
-.env.*
-!.env.example
+.DS_Store

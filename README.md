@@ -1,48 +1,45 @@
-# PVNetwork Client
+# PVNetwork Universal VPN Client
 
-Official development repository for **PVNetwork VPN**.
+**PVNetwork VPN** is being built as a dedicated, public, multi-language and multi-protocol VPN client.
 
-## Current milestone: V0.1 Preview
+## Current milestone — V0.2 Dedicated Foundation
 
-The first CI milestone produces a real installable **Android 9+ ARM64 APK** for connection testing. It uses the latest pinned official Amnezia Android release (`5.0.0.5`) as the VPN runtime base, then applies PVNetwork display branding and a development signing key.
+- Independent Android application source
+- Android package: `com.pvnetwork.vpn`
+- Dedicated PVNetwork splash, icon and UI
+- Multi-language resources: English, Persian, Arabic, Turkish, Russian, German, French, Spanish, Simplified Chinese
+- RTL support
+- Generic configuration import/detection layer
+- Protocol registry designed for multiple engines
+- GitHub Actions Android build
 
-### Build output
+## Current protocol status
 
-GitHub Actions workflow: `PVNetwork Preview APK`
+V0.2 can identify/import common forms of VLESS, Reality, VMess, OpenVPN, WireGuard, Trojan, Shadowsocks, Hysteria2, TUIC, AnyTLS, OpenConnect/AnyConnect, IKEv2 and SSTP.
 
-Artifact: `PVNetwork-Preview-APK`
+**Import support is not the same as tunnel-engine support.** Native connection engines are integrated in later gates and tracked in `docs/PROTOCOL_ROADMAP.md`.
 
-APK: `PVNetwork-VPN-v0.1-preview-arm64.apk`
+## Product principle
 
-## Product direction
+The client is public first: users can bring their own configuration. PVNetwork commercial services are an optional layer, not a requirement to use the client.
 
-PVNetwork is being developed as both a public VPN client for user-supplied configs/subscriptions and a PVNetwork account/store client for managed services.
+`UI -> ConnectionManager -> ProtocolRegistry -> ProtocolAdapter -> Engine -> Platform VPN API`
 
-The commercial catalog is backend-driven. Category names, products, prices, server counts, protocol availability and audience rules must not be hard-coded into the client.
+## Build
 
-## Planned protocol architecture
+GitHub Actions workflow: `PVNetwork Android CI`
 
-`UI -> ConnectionManager -> ProtocolRegistry -> ProtocolAdapter -> Platform VPN layer`
+Expected artifact: `PVNetwork-VPN-v0.2-dedicated-debug.apk`
 
-Initial runtime coverage:
-- VLESS / Reality / VMess through Xray
-- OpenVPN UDP/TCP
+See `docs/BUILD.md`.
 
-Reserved adapters:
-- WireGuard
-- Hysteria2
-- TUIC
-- AnyTLS
-- Trojan / Shadowsocks
-- OpenConnect-compatible enterprise VPNs
-- IKEv2/IPsec where supported by the platform
+## Documentation
 
-## Important V0.1 note
-
-V0.1 is a **preview build**, not the final Play Store release. Upstream internal Android package and service class identifiers are intentionally preserved during the first installation/connection gate so the VPN engine is not broken. The final production package target is `com.pvnetwork.vpn`.
-
-Production signing, Play Store AAB, backend authentication, store, ads and dynamic provisioning are separate release gates.
-
-## License
-
-The preview build modifies/redistributes Amnezia Client, which is GPL-3.0 licensed. Distribution must comply with the applicable GPL obligations and preserve relevant notices/source obligations.
+- `docs/ARCHITECTURE.md`
+- `docs/ARCHITECTURE_FA.md`
+- `docs/PROTOCOL_ROADMAP.md`
+- `docs/LOCALIZATION.md`
+- `docs/SECURITY.md`
+- `docs/BACKEND_CONTRACT.md`
+- `docs/ROADMAP.md`
+- `CHANGELOG.md`
