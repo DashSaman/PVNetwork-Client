@@ -23,7 +23,7 @@ jobs:
       - name: Prepare Android SDK/NDK
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0' 'ndk;27.0.12077973'
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-37' 'build-tools;37.0.0' 'ndk;29.0.14206865'
       - name: Resolve and test Go wrapper
         working-directory: core/xray-mobile
         run: |
@@ -39,9 +39,10 @@ jobs:
         working-directory: core/xray-mobile
         run: |
           export PATH="$(go env GOPATH)/bin:$PATH"
-          export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/27.0.12077973"
+          export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/29.0.14206865"
+          gomobile init
           mkdir -p dist
-          gomobile bind -target=android -androidapi 24 -o dist/pvxray.aar ./pvxray
+          gomobile bind -v -target=android -androidapi 24 -trimpath -ldflags='-s -w -buildid= -checklinkname=0' -o dist/pvxray.aar ./pvxray
           sha256sum dist/pvxray.aar | tee dist/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
