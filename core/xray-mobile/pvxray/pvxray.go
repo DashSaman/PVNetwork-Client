@@ -42,13 +42,8 @@ var (
 	instance *core.Instance
 )
 
-// Version returns the pinned Xray core version embedded in the mobile library.
-func Version() string {
-	return core.Version()
-}
+func Version() string { return core.Version() }
 
-// ValidateConfig parses the supplied JSON through Xray's own config loader.
-// It intentionally does not start networking.
 func ValidateConfig(config string) error {
 	if strings.TrimSpace(config) == "" {
 		return errors.New("configuration is empty")
@@ -57,9 +52,8 @@ func ValidateConfig(config string) error {
 	return err
 }
 
-// Start launches one Xray instance using the Android/iOS TUN file descriptor.
-// The fd must come from the platform VPN API. The caller owns the descriptor.
-func Start(config string, tunFD int) error {
+// Start uses int64 deliberately so gomobile exposes a stable Java/Kotlin long ABI.
+func Start(config string, tunFD int64) error {
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -72,7 +66,7 @@ func Start(config string, tunFD int) error {
 	if err := ValidateConfig(config); err != nil {
 		return err
 	}
-	fdValue := strconv.Itoa(tunFD)
+	fdValue := strconv.FormatInt(tunFD, 10)
 	if err := os.Setenv("xray.tun.fd", fdValue); err != nil {
 		return err
 	}
@@ -91,11 +85,9 @@ func Start(config string, tunFD int) error {
 	return nil
 }
 
-// Stop shuts down the active core and removes process-level TUN fd hints.
 func Stop() error {
 	mu.Lock()
 	defer mu.Unlock()
-
 	var err error
 	if instance != nil {
 		err = instance.Close()
@@ -106,7 +98,6 @@ func Stop() error {
 	return err
 }
 
-// IsRunning reports the real Xray instance state.
 func IsRunning() bool {
 	mu.Lock()
 	defer mu.Unlock()
