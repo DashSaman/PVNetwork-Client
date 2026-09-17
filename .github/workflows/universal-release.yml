@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'universal/**'
+      - 'scripts/**'
       - '.github/workflows/universal-release.yml'
   workflow_dispatch:
 
