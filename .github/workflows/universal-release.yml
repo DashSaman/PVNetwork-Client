@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: pvnetwork-universal-${{ github.ref }}
@@ -29,13 +30,29 @@ jobs:
         with:
           channel: stable
           cache: true
+      - name: Resolve latest core AAR run
+        id: aar_run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RID=$(gh run list -R "$GITHUB_REPOSITORY" --workflow xray-mobile-ci.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+          echo "run_id=$RID" >> "$GITHUB_OUTPUT"
+      - name: Fetch pvxray AAR
+        if: steps.aar_run.outputs.run_id != ''
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: pvnetwork-xray-android-aar
+          path: core/xray-mobile/dist
+          run-id: ${{ steps.aar_run.outputs.run_id }}
+          github-token: ${{ github.token }}
       - name: Generate Android host
         run: |
-          flutter create buildhost --org com.pvnetwork --project-name vpn --platforms=android --no-pub
-          rm -rf buildhost/lib buildhost/test
+          mkdir -p buildhost
           cp -R universal/lib buildhost/lib
           cp -R universal/test buildhost/test
           cp universal/pubspec.yaml buildhost/pubspec.yaml
+          TARGET=buildhost scripts/setup_host_projects.sh android
           sed -i 's/android:label="vpn"/android:label="PVNetwork"/' buildhost/android/app/src/main/AndroidManifest.xml
       - name: Validate and build APK
         working-directory: buildhost

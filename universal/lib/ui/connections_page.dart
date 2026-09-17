@@ -46,7 +46,7 @@ class ConnectionsPage extends StatelessWidget {
                             if (active) const Chip(label: Text('Active')),
                             PopupMenuButton<String>(
                               onSelected: (value) {
-                                if (value == 'use') controller.select(profile.id);
+                                if (value == 'use') controller.switchProfile(profile.id);
                                 if (value == 'delete') controller.remove(profile.id);
                               },
                               itemBuilder: (_) => const [
@@ -55,7 +55,7 @@ class ConnectionsPage extends StatelessWidget {
                               ],
                             ),
                           ]),
-                          onTap: () => controller.select(profile.id),
+                          onTap: () => controller.switchProfile(profile.id),
                         ),
                       ),
                     );
