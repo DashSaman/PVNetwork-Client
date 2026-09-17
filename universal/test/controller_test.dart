@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vpn/controller.dart';
 import 'package:vpn/core/engine/vpn_core_adapter.dart';
@@ -104,7 +102,7 @@ void main() {
   test('adapter start/stop drives event stream and statistics', () async {
     final binding = FakeBinding();
     // Direct adapter test with an injected binding.
-    final adapter = XrayAdapterForTest(binding);
+    final adapter = xrayAdapterForTest(binding);
     final events = <VpnConnectionState>[];
     final sub = adapter.events.listen((e) => events.add(e.state));
 
@@ -127,7 +125,7 @@ void main() {
   });
 
   test('adapter reports unavailable core honestly', () async {
-    final adapter = XrayAdapterForTest(FakeBinding()..available = false);
+    final adapter = xrayAdapterForTest(FakeBinding()..available = false);
     final caps = await adapter.probeCapabilities();
     expect(caps.protocols, isEmpty);
     expect(caps.version, 'unavailable');
@@ -135,4 +133,4 @@ void main() {
 }
 
 /// Exposes the adapter constructor with a custom binding for tests.
-XrayAdapter XrayAdapterForTest(XrayMobileBinding binding) => XrayAdapter(binding: binding);
+XrayAdapter xrayAdapterForTest(XrayMobileBinding binding) => XrayAdapter(binding: binding);

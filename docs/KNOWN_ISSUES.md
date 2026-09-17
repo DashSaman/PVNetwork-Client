@@ -48,3 +48,24 @@ Instrument `scripts/build_real_android.sh` and CI so every major phase writes a 
 - `PvxrayBridge.kt` resolves `Pvxray` reflectively over candidate packages (`github.com.pvnetwork.xray_mobile.pvxray`, `github.pvnetwork.xray_mobile.pvxray`, `com.pvnetwork.xray_mobile.pvxray`).
 - gomobile derives the Java package from the Go import path; if none of the candidates match on device, every bridge call reports "pvxray core is not bundled" — the fix is adding the actual package string to the candidate list (one line), not a rebuild strategy change.
 - Next check: D1/D2 on-device run; capture the AAR's actual package from the CI artifact if resolution fails.
+
+## KI-007 — Run 35175324797 (xray-mobile-ci @ ca4ea41) failed: wrong stats API in pvxray.go
+
+- Run ID: `35175324797`, Job ID: `105055655859`, Commit: `ca4ea41`
+- Failed step: `Resolve and test Go wrapper`
+- Observed error (GitHub exposed full log):
+  - `pvxray.go:135/137/139/141/143`: `stats.ManagerType` undefined in `app/stats`; `impossible type assertion: mgr.(stats.Manager)` — the `Manager` interface lives in `features/stats`, `app/stats` only ships the implementation.
+  - `pvxray.go:157`: `Counter has no field or method Get` — the interface method is `Value()`.
+- Root cause: imported `app/stats` instead of `features/stats` for the interface types.
+- Patch: switch import to `features/stats`, use `stats.ManagerType()` + `counter.Value()`.
+- Next check: rerun of `xray-mobile-ci.yml` on the fix commit must go green through `gomobile bind`.
+
+## KI-008 — Run 35175324789 (universal-release @ ca4ea41): analyzer lints + rigid gradle edit
+
+- Run ID: `35175324789`, Commit: `ca4ea41`
+- Failed jobs/steps and observed errors:
+  - Linux/iOS/macOS `Validate and build...`: `flutter analyze` exited 1 with 3 issues — `unused_import: page_frame.dart` (warning, home_page.dart:6) + `unnecessary_import: dart:async` and `non_constant_identifier_names: XrayAdapterForTest` (infos, controller_test.dart). Note: the Windows runner succeeded with the same code — runners resolved different Flutter stables, and the newer one treats the infos/warning as fatal. Do not rely on per-platform analyzer leniency; keep analyze at zero issues.
+  - Android `Generate Android host`: `AssertionError: unexpected build.gradle.kts layout` — the setup script asserted a literal `dependencies {` marker which the current Flutter template does not contain.
+- Root cause: (a) PageFrame was dropped from HomePage during the real-connect rewrite, leaving its import unused; test file carried an unnecessary import and a non-lowerCamelCase helper; (b) script edit was marker-fragile.
+- Patch: re-wrap HomePage content in `PageFrame`, drop `dart:async`, rename helper to `xrayAdapterForTest`; gradle edit now uses a regex with an append-new-block fallback; manifest patch also declares `foregroundServiceType="systemExempted"` + FGS/POST_NOTIFICATIONS/INTERNET permissions (pre-empting Android 14 startForeground crashes).
+- Next check: rerun of `universal-release.yml` must pass analyze on all four runners and build the APK with the AAR wired in.

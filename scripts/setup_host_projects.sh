@@ -40,6 +40,7 @@ text = open(path).read()
 service = '''        <service
             android:name=".PVVpnService"
             android:exported="false"
+            android:foregroundServiceType="systemExempted"
             android:permission="android.permission.BIND_VPN_SERVICE">
             <intent-filter>
                 <action android:name="android.net.VpnService" />
@@ -48,8 +49,19 @@ service = '''        <service
 '''
 assert '</application>' in text, 'unexpected AndroidManifest layout'
 text = text.replace('</application>', service + '    </application>', 1)
+permissions = [
+    'android.permission.FOREGROUND_SERVICE',
+    'android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED',
+    'android.permission.POST_NOTIFICATIONS',
+    'android.permission.INTERNET',
+]
+missing = [p for p in permissions if f'android:name="{p}"' not in text]
+if missing:
+    insert = ''.join(f'    <uses-permission android:name="{p}" />\n' for p in missing)
+    assert '</manifest>' in text
+    text = text.replace('</manifest>', insert + '</manifest>', 1)
 open(path, 'w').write(text)
-print('[pv] PVVpnService registered in AndroidManifest')
+print('[pv] PVVpnService registered in AndroidManifest (FGS type + permissions)')
 PY
   fi
 fi
@@ -63,14 +75,19 @@ if [[ -f "$AAR" ]]; then
   GRADLE_FILE="$TARGET_DIR/android/app/build.gradle.kts"
   if [[ -f "$GRADLE_FILE" ]] && ! grep -q "libs/pvxray.aar" "$GRADLE_FILE"; then
     python3 - "$GRADLE_FILE" <<'PY'
+import re
 import sys
 path = sys.argv[1]
 text = open(path).read()
-marker = 'dependencies {'
-assert marker in text, 'unexpected build.gradle.kts layout'
-text = text.replace(marker, marker + '\n    implementation(files("libs/pvxray.aar"))', 1)
+block = '\n    implementation(files("libs/pvxray.aar"))'
+m = re.search(r'\bdependencies\s*\{', text)
+if m:
+    text = text[:m.end()] + block + text[m.end():]
+    print('[pv] pvxray.aar injected into existing dependencies block')
+else:
+    text += '\ndependencies {\n    implementation(files("libs/pvxray.aar"))\n}\n'
+    print('[pv] pvxray.aar appended as a new dependencies block')
 open(path, 'w').write(text)
-print('[pv] pvxray.aar added to app dependencies')
 PY
   fi
 else

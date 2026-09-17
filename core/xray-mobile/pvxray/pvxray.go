@@ -10,8 +10,8 @@ import (
         "sync"
         "time"
 
-        "github.com/xtls/xray-core/app/stats"
         "github.com/xtls/xray-core/core"
+        "github.com/xtls/xray-core/features/stats"
 
         _ "github.com/xtls/xray-core/app/dispatcher"
         _ "github.com/xtls/xray-core/app/dns"
@@ -154,7 +154,7 @@ func queryCounter(name string) int64 {
         if counter == nil {
                 return 0
         }
-        return counter.Get()
+        return counter.Value()
 }
 
 // QueryUplink reports bytes uploaded through the 'proxy' outbound since the

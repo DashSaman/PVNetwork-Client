@@ -109,7 +109,9 @@ class HomePage extends StatelessWidget {
             ),
           );
 
-          return LayoutBuilder(builder: (context, box) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          return PageFrame(
+            title: 'PVNetwork',
+            child: LayoutBuilder(builder: (context, box) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('Universal VPN & Proxy Client', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 18),
             if (box.maxWidth >= 760)
@@ -123,7 +125,8 @@ class HomePage extends StatelessWidget {
               ActionChip(avatar: const Icon(Icons.content_paste), label: const Text('Clipboard'), onPressed: () => importClipboard(context, controller)),
               ActionChip(avatar: const Icon(Icons.file_open), label: const Text('Import file'), onPressed: () => importFile(context, controller)),
             ]),
-          ]));
+          ])),
+          );
         },
       );
 
