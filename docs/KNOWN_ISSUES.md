@@ -78,3 +78,12 @@ Instrument `scripts/build_real_android.sh` and CI so every major phase writes a 
 - Root cause: the Android job now copies `universal/test` before running `setup_host_projects.sh`; `flutter create` then adds the default `widget_test.dart` (which references the non-existent `MyApp`) into the copied suite. The other platform jobs still use the old inline flow with `rm -rf buildhost/test` and stayed green: iOS unsigned, macOS, Windows x64, Linux x64 all passed analyze + test + build.
 - Patch: `setup_host_projects.sh` removes `test/widget_test.dart` right after `flutter create` (covers CI and local dev).
 - Next check: Android APK job on the next run must reach `flutter build apk` and package `PVNetwork-Android-dev.apk` with the AAR wired in.
+
+## KI-010 — Run 35176483178 (universal-release @ 0061d9d): Android Kotlin compile — missing Intent import
+
+- Run ID: `35176483178`, Job ID: `105059222615`, Commit: `0061d9d`
+- Failed step: `Validate and build APK` → `:app:compileReleaseKotlin`
+- Observed error: `MainActivity.kt:20:5 'onActivityResult' overrides nothing` + `MainActivity.kt:20:76 Unresolved reference 'Intent'` (missing `android.content.Intent` import made the override signature invalid).
+- Root cause: hand-written patch file missed the import; desktop/iOS jobs were unaffected (Kotlin compiles only in the Android job).
+- Patch: add `import android.content.Intent` to `universal/patches/android/MainActivity.kt`.
+- Next check: Android APK job must pass `assembleRelease`; AAR pickup itself already works (50 MB artifact fetched and appended as a new `dependencies` block, as designed).
