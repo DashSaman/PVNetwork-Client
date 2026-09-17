@@ -1,6 +1,6 @@
 # Known Issues / Failed Attempts
 
-Last updated: 2026-08-14 (+03:30)
+Last updated: 2026-09-17 (+03:30)
 
 ## KI-001 — V0.2 dedicated shell is not a VPN engine
 
@@ -35,3 +35,16 @@ Instrument `scripts/build_real_android.sh` and CI so every major phase writes a 
 - `.github/workflows/android-ci.yml` still copies `app-debug.apk` to `PVNetwork-VPN-v0.2-dedicated-debug.apk` and its repository step describes tunnel engines as future work.
 - This is stale and dangerous because a successful real V0.3 build could be mislabeled as the shell.
 - Fix before final artifact: publish V0.3 real-engine filenames/metadata and never overwrite V0.2 history.
+
+## KI-005 — Legacy sing-box Android CI track is superseded (decision, not a new failure)
+
+- `android-ci.yml` (KI-002) remains red; the source-build sing-box/SFA pipeline is a dead end for V0.3.
+- Decision: the first-party `core/xray-mobile` wrapper + `xray-mobile-ci.yml` (AAR artifact) + `universal-release.yml` (Flutter host) is the only engine delivery path.
+- Do not invest retries into the sing-box build script unless a new requirement re-opens it.
+- Next check: Phase D on-device verification (see `AGENTS.md` tracker); record run IDs here after the next pushes.
+
+## KI-006 — gomobile Java package name for the pvxray AAR is assumption-based until first device log
+
+- `PvxrayBridge.kt` resolves `Pvxray` reflectively over candidate packages (`github.com.pvnetwork.xray_mobile.pvxray`, `github.pvnetwork.xray_mobile.pvxray`, `com.pvnetwork.xray_mobile.pvxray`).
+- gomobile derives the Java package from the Go import path; if none of the candidates match on device, every bridge call reports "pvxray core is not bundled" — the fix is adding the actual package string to the candidate list (one line), not a rebuild strategy change.
+- Next check: D1/D2 on-device run; capture the AAR's actual package from the CI artifact if resolution fails.
