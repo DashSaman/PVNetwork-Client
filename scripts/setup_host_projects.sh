@@ -26,6 +26,10 @@ mkdir -p "$TARGET_DIR"
 echo "[pv] Creating host projects ($PLATFORMS) in $TARGET_DIR"
 (cd "$TARGET_DIR" && flutter create --org com.pvnetwork --project-name vpn --platforms="$PLATFORMS" .)
 
+# flutter create drops a default test/widget_test.dart referencing MyApp; the
+# PVNetwork test suite replaces it.
+rm -f "$TARGET_DIR/test/widget_test.dart"
+
 if [[ -d "$PATCHES" ]]; then
   echo "[pv] Applying Android patches"
   mkdir -p "$KT_DIR"

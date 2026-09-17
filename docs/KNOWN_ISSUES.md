@@ -69,3 +69,12 @@ Instrument `scripts/build_real_android.sh` and CI so every major phase writes a 
 - Root cause: (a) PageFrame was dropped from HomePage during the real-connect rewrite, leaving its import unused; test file carried an unnecessary import and a non-lowerCamelCase helper; (b) script edit was marker-fragile.
 - Patch: re-wrap HomePage content in `PageFrame`, drop `dart:async`, rename helper to `xrayAdapterForTest`; gradle edit now uses a regex with an append-new-block fallback; manifest patch also declares `foregroundServiceType="systemExempted"` + FGS/POST_NOTIFICATIONS/INTERNET permissions (pre-empting Android 14 startForeground crashes).
 - Next check: rerun of `universal-release.yml` must pass analyze on all four runners and build the APK with the AAR wired in.
+
+## KI-009 — Run 35175954550 (universal-release @ b47abd5): Android job failed on generated widget_test.dart
+
+- Run ID: `35175954550`, Job ID: `105057589728`, Commit: `b47abd5`
+- Failed step: `Validate and build APK`
+- Observed error: `test/widget_test.dart:16:35 • creation_with_non_type — The name 'MyApp' isn't a class`
+- Root cause: the Android job now copies `universal/test` before running `setup_host_projects.sh`; `flutter create` then adds the default `widget_test.dart` (which references the non-existent `MyApp`) into the copied suite. The other platform jobs still use the old inline flow with `rm -rf buildhost/test` and stayed green: iOS unsigned, macOS, Windows x64, Linux x64 all passed analyze + test + build.
+- Patch: `setup_host_projects.sh` removes `test/widget_test.dart` right after `flutter create` (covers CI and local dev).
+- Next check: Android APK job on the next run must reach `flutter build apk` and package `PVNetwork-Android-dev.apk` with the AAR wired in.
