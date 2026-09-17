@@ -12,6 +12,12 @@ class ProfileDetectionResult {
     this.subscriptionUrl,
     this.metadata = const <String, String>{},
     this.unsupportedFields = const <String>[],
+    this.transport,
+    this.security,
+    this.dnsPolicy,
+    this.routingPolicy,
+    this.engineRequirements = const <String, String>{},
+    this.secretRefs = const <String, String>{},
   });
 
   final String protocol;
@@ -22,6 +28,12 @@ class ProfileDetectionResult {
   final String? subscriptionUrl;
   final Map<String, String> metadata;
   final List<String> unsupportedFields;
+  final String? transport;
+  final String? security;
+  final String? dnsPolicy;
+  final String? routingPolicy;
+  final Map<String, String> engineRequirements;
+  final Map<String, String> secretRefs;
 
   PVProfile toProfile() => PVProfile(
         id: '${DateTime.now().microsecondsSinceEpoch}-${protocol.toLowerCase()}',
@@ -34,6 +46,12 @@ class ProfileDetectionResult {
         subscriptionUrl: subscriptionUrl,
         metadata: metadata,
         unsupportedFields: unsupportedFields,
+        transport: transport,
+        security: security,
+        dnsPolicy: dnsPolicy,
+        routingPolicy: routingPolicy,
+        engineRequirements: engineRequirements,
+        secretRefs: secretRefs,
       );
 }
 
@@ -53,6 +71,9 @@ class ProfileDetector {
     'https',
     'wireguard',
   };
+
+  /// Schemes the first-party Xray core can serve today.
+  static const Set<String> _xraySchemes = <String>{'vless', 'vmess', 'trojan', 'ss', 'socks', 'socks5'};
 
   ProfileDetectionResult detect(String input, {String sourceType = 'text'}) {
     final raw = input.trim();
@@ -127,6 +148,7 @@ class ProfileDetector {
       sourceType: sourceType,
       rawSource: raw,
       endpoint: host == null ? null : (port == null ? host : '$host:$port'),
+      engineRequirements: const <String, String>{'engine': 'openvpn'},
     );
   }
 
@@ -141,6 +163,7 @@ class ProfileDetector {
       sourceType: sourceType,
       rawSource: raw,
       endpoint: endpoint,
+      engineRequirements: const <String, String>{'engine': 'wireguard'},
     );
   }
 
@@ -166,6 +189,7 @@ class ProfileDetector {
         sourceType: sourceType,
         rawSource: raw,
         unsupportedFields: const <String>['YAML normalization will be finalized with the Mihomo adapter.'],
+        engineRequirements: const <String, String>{'engine': 'mihomo'},
       );
 
   ProfileDetectionResult _vmess(String raw, String sourceType) {
@@ -179,12 +203,17 @@ class ProfileDetector {
         final host = map['add']?.toString();
         final port = map['port']?.toString();
         final ps = map['ps']?.toString();
+        final net = _normalizeTransport(map['net']?.toString());
+        final tls = (map['tls']?.toString() ?? '').isEmpty ? null : map['tls'].toString().toLowerCase();
         return ProfileDetectionResult(
           protocol: 'VMess',
           name: (ps != null && ps.trim().isNotEmpty) ? ps.trim() : (host ?? 'VMess profile'),
           sourceType: sourceType,
           rawSource: raw,
           endpoint: host == null ? null : (port == null ? host : '$host:$port'),
+          transport: net,
+          security: tls,
+          engineRequirements: const <String, String>{'engine': 'xray', 'protocols': 'vmess'},
         );
       }
     } catch (_) {
@@ -196,6 +225,7 @@ class ProfileDetector {
       sourceType: sourceType,
       rawSource: raw,
       unsupportedFields: const <String>['VMess payload requires adapter-level validation.'],
+      engineRequirements: const <String, String>{'engine': 'xray', 'protocols': 'vmess'},
     );
   }
 
@@ -215,19 +245,52 @@ class ProfileDetector {
     };
     final label = Uri.decodeComponent(uri.fragment).trim();
     final endpoint = uri.host.isEmpty ? null : '${uri.host}${uri.hasPort ? ':${uri.port}' : ''}';
-    final security = uri.queryParameters['security'];
-    final flow = uri.queryParameters['flow'];
-    final displayProtocol = protocol == 'VLESS' && security == 'reality' ? 'VLESS · REALITY' : protocol;
+    final q = uri.queryParameters;
+    final security = (q['security'] ?? (scheme == 'trojan' ? 'tls' : null))?.toLowerCase();
+    final transport = _normalizeTransport(q['type'] ?? q['method']);
+    final engine = _xraySchemes.contains(scheme) ? 'xray' : switch (scheme) {
+      'hysteria' || 'hysteria2' || 'hy2' || 'tuic' => 'sing-box',
+      'wireguard' => 'wireguard',
+      _ => 'generic',
+    };
     return ProfileDetectionResult(
-      protocol: displayProtocol,
+      protocol: protocol == 'VLESS' && security == 'reality' ? 'VLESS · REALITY' : protocol,
       name: label.isNotEmpty ? label : (endpoint ?? '$protocol profile'),
       sourceType: sourceType,
       rawSource: raw,
       endpoint: endpoint,
+      transport: transport,
+      security: security,
       metadata: <String, String>{
         if (security != null) 'security': security,
-        if (flow != null) 'flow': flow,
+        if ((q['flow'] ?? '').isNotEmpty) 'flow': q['flow']!,
       },
+      engineRequirements: <String, String>{'engine': engine, 'protocols': switch (scheme) {
+        'vless' => 'vless',
+        'vmess' => 'vmess',
+        'trojan' => 'trojan',
+        'ss' => 'shadowsocks',
+        'socks' || 'socks5' => 'socks',
+        'hysteria' => 'hysteria',
+        'hysteria2' || 'hy2' => 'hysteria2',
+        'tuic' => 'tuic',
+        'wireguard' => 'wireguard',
+        _ => scheme.toLowerCase(),
+      }},
     );
+  }
+
+  static String? _normalizeTransport(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    return switch (raw.toLowerCase()) {
+      'tcp' || 'none' => 'raw',
+      'ws' => 'websocket',
+      'httpupgrade' => 'httpupgrade',
+      'splithttp' || 'xhttp' => 'xhttp',
+      'grpc' || 'gun' => 'grpc',
+      'kcp' || 'mkcp' => 'mkcp',
+      'quic' => 'quic',
+      _ => raw.toLowerCase(),
+    };
   }
 }
