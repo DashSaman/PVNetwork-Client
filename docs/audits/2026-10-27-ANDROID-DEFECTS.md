@@ -27,6 +27,9 @@ D-004 [P0][FEATURE_MISSING] No physical-device, end-to-end import -> permission 
 
 D-005 [P0][CONFIRMED_SOURCE] Connecting cannot be cancelled from PVController.disconnect(): isBusy includes connecting, so disconnect returns immediately; Home button is disabled while busy. In native PvxrayPlugin pendingStart can remain outstanding if service never returns success/failure. DoD: cancellable/timeout-bounded startup and robust exactly-once callback settlement, with regression tests for quick connect/disconnect, permission denial, foreground service failure and core start hang.
 
+
+D-023 [P0][CONFIRMED_SOURCE_DESIGN / NEEDS_DEVICE_REPRO] The generated Xray configuration adds an unauthenticated HTTP health-in proxy bound to 127.0.0.1:19670 and explicitly routes that inbound to the user's proxy outbound. Other same-device apps may be able to use the local open proxy, bypassing intended per-app split-tunnel policy and disclosing the proxy exit identity. Comparable NekoBox local proxy risk is documented at https://github.com/MatsuriDayo/NekoBoxForAndroid/issues/1197 . DoD: remove the unrestricted local HTTP proxy or enforce strict socket-level isolation and authorization, use a private core-native delay-test path, and verify an excluded app cannot connect to the localhost proxy.
+
 ## P1 high priority defects
 
 D-006 [P1][CONFIRMED_SOURCE] Secret deletion prefix mismatch: ProfileRepository.deleteProfileSecrets passes prefix pvnetwork.secret.<profileId>. while SecureStorageSecretStore.deletePrefix strips pvnetwork.secret. from enumerated keys before comparing. This prevents intended matching; verify and fix explicit ref deletion/cleanup. The currently stored profile document itself also retains raw credential-bearing URIs.
@@ -66,11 +69,12 @@ D-022 [P2] Required open-source license, commercial redistributability, SBOM, pi
 
 1. Make Android CI reproducible and green; address the known file_picker/AGP compatibility failure with a tested migration and immutable lockfiles.
 2. Fail-closed artifact provenance: exact Xray AAR built from locked source/hash, verify class/package before APK upload.
-3. Instrument on-device TUN/socket exclusion, lifecycle, permission, DNS and data-path tests; fix any observed routing loops or fd leaks.
-4. Repair controller cancellation/active adapter/session state and add deterministic asynchronous race tests.
-5. Repair secret extraction and deletion, then subscription manager + fully functional QR/file/multi-profile import.
-6. Add engine adapters in manageable slices (Xray validation first, then OpenVPN/WireGuard, then chosen sing-box/Mihomo coverage).
-7. Restore real locale/RTL, theme, diagnostics, account/store backend and quality release gates.
+3. Remove/lock down the unauthenticated health-in localhost HTTP proxy; test per-app isolation and local socket access.
+4. Instrument on-device TUN/socket exclusion, lifecycle, permission, DNS and data-path tests; fix any observed routing loops or fd leaks.
+5. Repair controller cancellation/active adapter/session state and add deterministic asynchronous race tests.
+6. Repair secret extraction and deletion, then subscription manager + fully functional QR/file/multi-profile import.
+7. Add engine adapters in manageable slices (Xray validation first, then OpenVPN/WireGuard, then chosen sing-box/Mihomo coverage).
+8. Restore real locale/RTL, theme, diagnostics, account/store backend and quality release gates.
 
 ## Acceptance / proof policy
 
