@@ -44,3 +44,12 @@ Phase D: push this branch, watch `xray-mobile-ci` (Go tests) and `universal-rele
 
 ## Release rule
 Do not publish another user-facing release merely because the UI builds. The next download offered as a usable VPN client must contain at least one real, verified connection adapter.
+
+## 2026-10-27 external defect review (not a code fix)
+
+- Head reviewed before documentation writes: d6a4aaccbae304ed4acc7c56a621850e969871c6.
+- Universal Android CI remains FAILED at 35177021596; Go AAR workflow 35175954590 passed but there is no device traffic receipt.
+- Independent prioritized source/CI findings and compiler root cause: docs/audits/2026-10-27-ANDROID-DEFECTS.md.
+- Competitor benchmark and full feature acceptance backlog: docs/audits/2026-10-27-COMPETITOR-PARITY.md.
+- New P0 review item: local unauthenticated HTTP health proxy accessible at 127.0.0.1:19670 and routed into the proxy outbound. Must be disabled/isolated and device-tested before public release.
+- No production-readiness or verified device connection claim was added; application code unchanged during this audit.
