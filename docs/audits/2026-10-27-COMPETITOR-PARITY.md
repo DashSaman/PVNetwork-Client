@@ -12,6 +12,8 @@ Current PVNetwork status: Android Xray implementation candidate, current APK CI 
 - v2rayN: https://github.com/2dust/v2rayN — desktop Xray/sing-box interface, subscriptions, advanced platform controls.
 - FlClash: https://github.com/chen08209/FlClash — multi-device Flutter/Mihomo, proxy groups, rule sets, request/DNS views, quick actions, WebDAV backup and TV/keyboard UX.
 - Clash Verge Rev: https://github.com/clash-verge-rev/clash-verge-rev — desktop system proxy, TUN, profile merge/script, visual node/rule editing, logs, tray and WebDAV sync.
+- NekoBox for Android: https://github.com/MatsuriDayo/NekoBoxForAndroid — expert sing-box-oriented import/subscription and per-app routing; evaluate known local SOCKS access risk: https://github.com/MatsuriDayo/NekoBoxForAndroid/issues/1197 .
+- Happ: https://github.com/Happ-proxy/happ-desktop — Xray-based multi-platform Xray profile and rule-oriented proxy UI; official product feature summary, not reusable app source.
 - OpenVPN Connect: https://openvpn.net/connect-docs/android-installation-guide/ — .ovpn, inline/external certificate/auth flows, Always-on, Quick Settings, authentication and route/IPv6 semantics.
 - Amnezia VPN: https://github.com/amnezia-vpn/amnezia-client — WireGuard/OpenVPN/IKEv2/AmneziaWG and self-hosted VPN provisioning (distinct operator-facing feature; no unsafe credential embedding).
 - Official WireGuard: https://github.com/WireGuard/wireguard-android — WireGuard tunnel/profile workflow.
@@ -65,6 +67,7 @@ Current PVNetwork status: Android Xray implementation candidate, current APK CI 
 
 ### Parity group F: engineering/security/releases [P0/P1]
 - [ ] Device interop matrix per protocol/transport/security/OS and real IPv4, IPv6, DNS, UDP/QUIC tests.
+- [ ] Prevent localhost unauthenticated proxy exposure: apps excluded from VPN must not be able to use local helper proxy sockets to identify remote exit IP.
 - [ ] Failure/regression matrix: revoke VPN, incoming call, sleep/Doze, Wi-Fi/mobile switch, captive portal, core crash, malformed URI, expired cert, auth failure, corrupt storage and permission denial.
 - [ ] Parser fuzzing and secret-logging tests, resource/fd leak tests, stress/long-duration sessions and battery/performance baselines.
 - [ ] Dependency/security advisories, SBOM, third-party license and attribution compliance; no unreviewed GPL/non-commercial copy.
