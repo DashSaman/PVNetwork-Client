@@ -87,3 +87,19 @@ Instrument `scripts/build_real_android.sh` and CI so every major phase writes a 
 - Root cause: hand-written patch file missed the import; desktop/iOS jobs were unaffected (Kotlin compiles only in the Android job).
 - Patch: add `import android.content.Intent` to `universal/patches/android/MainActivity.kt`.
 - Next check: Android APK job must pass `assembleRelease`; AAR pickup itself already works (50 MB artifact fetched and appended as a new `dependencies` block, as designed).
+
+## KI-011 — Universal Android CI 35177021596: file_picker plugin class missing (2026-10-27 audit)
+
+- Run ID: 35177021596, Android job ID: 105060854421, head: d6a4aaccbae304ed4acc7c56a621850e969871c6.
+- Failed step: Validate and build APK, Gradle :app:compileReleaseJavaWithJavac.
+- Observed error: GeneratedPluginRegistrant.java cannot resolve com.mr.flutter.plugin.filepicker.FilePickerPlugin.
+- Dependency: universal/pubspec.yaml pins file_picker 11.0.2. Very similar AGP9 class-registration regression is recorded upstream: https://github.com/vicajilau/flutter_file_picker/issues/2002 and https://github.com/vicajilau/flutter_file_picker/issues/2200 .
+- Fix not yet attempted in this review. Test a supported plugin migration (v12+ changes API) or a proven compatible toolchain version, then require Android workflow PASS, pinned dependency resolution and APK test. Do not declare a fix from docs alone.
+
+## KI-012 — 2026-10-27 independent security/runtime code review findings
+
+- Possible VPN output socket loop due to unproven VpnService.protect()/network binding (HIGH_RISK_NEEDS_DEVICE).
+- Auth-free local HTTP health proxy at 127.0.0.1:19670 routed to proxy outbound can undermine per-app isolation (CONFIRMED_SOURCE_DESIGN; needs cross-app hardware repro).
+- AAR 'latest successful' artifact is accepted from a potentially unrelated source commit and an absent AAR is tolerated by CI (CONFIRMED_SOURCE).
+- Start cannot be cancelled, profile secret cleanup prefix mismatch, raw secret indirection not used by import, subscription and other engine paths incomplete.
+- Complete regression scope/priority/acceptance criteria: docs/audits/2026-10-27-ANDROID-DEFECTS.md.
