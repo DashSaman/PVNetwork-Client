@@ -46,6 +46,9 @@ void main(List<String> args) {
     'shadowsocks-aead.json': 'ss://$ssUser@vpn.example.com:8388',
     'socks5-auth.json': 'socks5://user:pass@192.168.1.10:1080',
     'https-proxy-auth.json': 'https://user:pass@proxy.example.com:3128',
+    // Raw loopback VLESS is deliberately restricted to a private address.
+    // The Go handshake test rewrites only this test server's ephemeral port.
+    'vless-loopback.json': 'vless://$id@127.0.0.1:443?security=none&type=raw',
   };
 
   for (final sample in samples.entries) {
