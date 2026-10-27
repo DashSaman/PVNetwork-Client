@@ -27,6 +27,30 @@ void main() {
     expect(await secrets.read('profile-2.password'), 'secret-c');
   });
 
+  test('import secrets are never serialized in cleartext profile JSON', () async {
+    final secrets = InMemorySecretStore();
+    final repo = ProfileRepository(secretStore: secrets);
+    final original = PVProfile(
+      id: 'imported-1',
+      name: 'Imported',
+      protocol: 'Subscription / HTTP',
+      sourceType: 'subscription',
+      rawSource: 'https://sub.example.com/secret-token',
+      subscriptionUrl: 'https://sub.example.com/secret-token',
+      createdAt: DateTime.utc(2026, 10, 27),
+    );
+    final protected = await repo.secureImportedProfile(original);
+    expect(PVProfile.encodeList([protected]), isNot(contains('secret-token')));
+    expect(protected.rawSource, r'$ref{rawSource}');
+    expect(protected.subscriptionUrl, r'$ref{subscriptionUrl}');
+    final resolved = await repo.resolveSecrets(protected);
+    expect(resolved.rawSource, original.rawSource);
+    expect(resolved.subscriptionUrl, original.subscriptionUrl);
+    await repo.deleteProfileSecrets(protected);
+    expect(await secrets.read('imported-1.rawSource'), isNull);
+    expect(await secrets.read('imported-1.subscriptionUrl'), isNull);
+  });
+
   test('resolves field placeholders without overwriting stored source', () async {
     final secrets = InMemorySecretStore();
     final repo = ProfileRepository(secretStore: secrets);
