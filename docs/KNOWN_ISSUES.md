@@ -119,3 +119,12 @@ Instrument `scripts/build_real_android.sh` and CI so every major phase writes a 
 - Legacy raw config/subscription URLs could remain serialized in profile JSON. `loadProfiles()` now migrates raw fields into SecretStore references, with idempotence unit tests. Backup/migration real device verification is pending.
 - Core running state is distinguished from the disabled unauthenticated latency probe (`-1` is unknown, not tunnel failure); native plugin clears pending start on exceptions and stop.
 - Existing basic CI run `40425906428` passed. Intermediate controller run `40427581278` failed Flutter analyze (unnecessary_underscores in controller.dart:83) and was fixed by commit a13e916. Later OS-host tests passed on `40428100913` while that run's Android stage was still ongoing during this update.
+
+
+## KI-015 — 2026-10-27 Stage-2 timeout unit tests bound to wrong channel (FIX COMMITTED, RECHECK PENDING)
+
+- Evidence: Actions `40433330062`, Linux job `Validate and build Linux`. Flutter analyzer PASS. Flutter tests 51 PASS / 4 FAIL at source SHA `c0f2ba7ff1100596bbb15efdd08c4c299a1ba9b7`.
+- Failures: `xray_mobile_binding_timeout_test.dart` all four new tests raised `MissingPluginException` on `dev.pvnetwork.xray` instead of using their injected `dev.pvnetwork.xray.timeout-test` mock channel.
+- Root cause: `MethodChannelXrayBinding` took `channel` in constructor, but ten methods used private static `_channel` directly. This is a real dependency injection defect that made cancellation/timeout tests invalid.
+- Fix commit `ba4514d7ed62521ca29b0d182c796995d204d5da`: route all calls through instance `channel`, retain private `_channel` only as default constructor value.
+- Acceptance: latest exact-SHA CI Flutter tests all green, Android Kotlin compile/AAR/APK green, emulator smoke green. The fix is not PASS until that new run succeeds.
