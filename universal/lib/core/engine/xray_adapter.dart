@@ -112,10 +112,27 @@ class XrayAdapter implements VpnCoreAdapter {
       final resolved = await normalizeProfile(profile);
       final config = _builder.build(resolved);
       await _binding.start(config);
+      if (!await _binding.isRunning()) {
+        throw StateError('Native core did not confirm it is running.');
+      }
       _startedAt = DateTime.now();
-      await _binding.resetStats();
+      // Stats are optional instrumentation: a failed counter reset must not
+      // tear down an otherwise running VPN or create an optimistic error.
+      try {
+        await _binding.resetStats();
+      } catch (_) {
+        // A later statistics poll will report unknown counters.
+      }
       _transition(VpnConnectionState.connected);
     } catch (e) {
+      // Native startup may have partially established a tunnel before the
+      // binding threw; always attempt cleanup before making an error visible.
+      try {
+        await _binding.stop();
+      } catch (_) {
+        // The caller must retry stop if the platform still owns a tunnel.
+      }
+      _startedAt = null;
       _lastError = e.toString();
       _transition(VpnConnectionState.error, message: _lastError);
       rethrow;
@@ -128,9 +145,12 @@ class XrayAdapter implements VpnCoreAdapter {
     _transition(VpnConnectionState.disconnecting);
     try {
       await _binding.stop();
-    } finally {
       _startedAt = null;
       _transition(VpnConnectionState.disconnected);
+    } catch (e) {
+      _lastError = 'Unable to stop the native VPN core.';
+      _transition(VpnConnectionState.error, message: _lastError);
+      rethrow;
     }
   }
 
