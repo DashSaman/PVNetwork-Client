@@ -134,7 +134,15 @@ class PVController extends ChangeNotifier {
     if (!profiles.any((p) => p.id == id) || id == selectedId) return;
     final shouldReconnect = linkState == PVLinkState.connected ||
         linkState == PVLinkState.connecting;
-    if (shouldReconnect) await disconnect();
+    if (_activeAdapter != null &&
+        (shouldReconnect || linkState == PVLinkState.error)) {
+      await disconnect();
+    }
+    // Never change the displayed selected node while the old tunnel still
+    // owns native resources after a failed stop.
+    if (_activeAdapter != null || linkState == PVLinkState.disconnecting) {
+      return;
+    }
     await select(id);
     if (shouldReconnect) await connect();
   }
@@ -163,6 +171,12 @@ class PVController extends ChangeNotifier {
   Future<void> connect() {
     final profile = selected;
     if (profile == null || isBusy || linkState == PVLinkState.connected) {
+      return Future<void>.value();
+    }
+    if (_activeAdapter != null) {
+      lastError = 'A previous VPN session is still active or its cleanup failed. Disconnect it before starting another.';
+      linkState = PVLinkState.error;
+      _notify();
       return Future<void>.value();
     }
     final chosen = adapterFor(profile);
