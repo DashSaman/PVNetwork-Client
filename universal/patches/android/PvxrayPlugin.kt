@@ -25,6 +25,7 @@ object PvxrayPlugin : MethodChannel.MethodCallHandler {
 
     private var pendingPrepare: MethodChannel.Result? = null
     private var pendingStart: MethodChannel.Result? = null
+    private var pendingStop: MethodChannel.Result? = null
 
     fun register(messenger: BinaryMessenger, context: android.content.Context) {
         appContext = context.applicationContext
@@ -48,6 +49,21 @@ object PvxrayPlugin : MethodChannel.MethodCallHandler {
     fun reportStartFailure(message: String) {
         pendingStart?.error("start-failed", message, null)
         pendingStart = null
+    }
+
+    /** Must be called on the Android main thread after native Stop returns. */
+    fun reportStopCompleted(clean: Boolean) {
+        val pending = pendingStop
+        pendingStop = null
+        if (clean) {
+            pending?.success(true)
+        } else {
+            pending?.error(
+                "stop-failed",
+                "The VPN core could not be cleanly stopped.",
+                null
+            )
+        }
     }
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
@@ -80,12 +96,17 @@ object PvxrayPlugin : MethodChannel.MethodCallHandler {
                     appContext!!.startForegroundService(intent)
                 }
                 "stop" -> {
-                    // Release a Dart caller waiting for native start before
-                    // issuing stop. A later service callback will be ignored.
+                    if (pendingStop != null) {
+                        result.error("busy", "Another VPN stop is already in progress.", null)
+                        return
+                    }
+                    // A stop must only resolve after the worker has closed
+                    // Xray and its TUN, not when startService merely returns.
+                    pendingStop = result
                     reportStartFailure("VPN connection was cancelled.")
-                    val intent = Intent(appContext, PVVpnService::class.java).setAction(PVVpnService.ACTION_STOP)
+                    val intent = Intent(appContext, PVVpnService::class.java)
+                        .setAction(PVVpnService.ACTION_STOP)
                     appContext!!.startService(intent)
-                    result.success(true)
                 }
                 "isRunning" -> result.success(PvxrayBridge.isRunning())
                 "queryUplink" -> result.success(PvxrayBridge.queryUplink())
@@ -125,6 +146,7 @@ object PvxrayPlugin : MethodChannel.MethodCallHandler {
             // A failed foreground-service launch must not leave pendingStart
             // permanently occupied, otherwise every retry reports busy.
             if (pendingStart === result) pendingStart = null
+            if (pendingStop === result) pendingStop = null
             if (pendingPrepare === result) pendingPrepare = null
             result.error("core-error", t.message ?: t.javaClass.simpleName, null)
         }
