@@ -26,6 +26,8 @@ func TestPVNetworkGeneratedConfigsAgainstPinnedCore(t *testing.T) {
         "vmess-ws-tls.json": false,
         "trojan-tls.json": false,
         "shadowsocks-aead.json": false,
+        "socks5-auth.json": false,
+        "https-proxy-auth.json": false,
     }
     for _, item := range entries {
         if item.IsDir() { continue }
