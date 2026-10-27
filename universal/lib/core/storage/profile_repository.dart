@@ -18,7 +18,6 @@ class ProfileRepository {
   static const _selectedKey = 'pvnetwork.selected.v1';
   static const _languageKey = 'pvnetwork.language.v1';
   static const _themeKey = 'pvnetwork.theme.v1';
-  static const _secretPrefix = 'pvnetwork.secret.';
 
   Future<List<PVProfile>> loadProfiles() async {
     final raw = await _storage.read(key: _profilesKey);
@@ -62,8 +61,14 @@ class ProfileRepository {
   }
 
   /// Deletes every secret attached to [profile] (call on profile removal).
-  Future<void> deleteProfileSecrets(PVProfile profile) =>
-      secrets.deletePrefix('$_secretPrefix${profile.id}.');
+  Future<void> deleteProfileSecrets(PVProfile profile) async {
+    // Delete references explicitly so backends that cannot enumerate keys
+    // still remove credentials. Also sweep the legacy per-profile namespace.
+    for (final ref in profile.secretRefs.values.toSet()) {
+      await secrets.delete(ref);
+    }
+    await secrets.deletePrefix('${profile.id}.');
+  }
 
   /// Resolves the full secret view of [profile]: out-of-band refs replace
   /// placeholders, e.g. rawSource contains `$ref{password}` markers which are
