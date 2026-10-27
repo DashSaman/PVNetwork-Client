@@ -44,6 +44,8 @@ void main(List<String> args) {
     'vmess-ws-tls.json': 'vmess://$vmessPayload',
     'trojan-tls.json': 'trojan://synthetic-password@vpn.example.com:443?security=tls&type=raw',
     'shadowsocks-aead.json': 'ss://$ssUser@vpn.example.com:8388',
+    'socks5-auth.json': 'socks5://user:pass@192.168.1.10:1080',
+    'https-proxy-auth.json': 'https://user:pass@proxy.example.com:3128',
   };
 
   for (final sample in samples.entries) {
