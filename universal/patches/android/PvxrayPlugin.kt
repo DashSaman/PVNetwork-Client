@@ -3,6 +3,9 @@ package com.pvnetwork.vpn
 import android.app.Activity
 import android.content.Intent
 import android.net.VpnService
+import android.os.Handler
+import android.os.Looper
+import java.util.concurrent.Executors
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -26,6 +29,30 @@ object PvxrayPlugin : MethodChannel.MethodCallHandler {
     private var pendingPrepare: MethodChannel.Result? = null
     private var pendingStart: MethodChannel.Result? = null
     private var pendingStop: MethodChannel.Result? = null
+    private val main = Handler(Looper.getMainLooper())
+    private val queryWorker = Executors.newSingleThreadExecutor { task ->
+        Thread(task, "pvnetwork-vpn-query").apply { isDaemon = true }
+    }
+
+    // A blocked Go mutex must never block Flutter's Android main thread.
+    // Result completions are always marshalled back to that thread.
+    private fun runNative(result: MethodChannel.Result, task: () -> Any?) {
+        queryWorker.execute {
+            try {
+                val value = task()
+                main.post { result.success(value) }
+            } catch (_: Throwable) {
+                main.post {
+                    result.error(
+                        "core-error",
+                        "Native VPN operation failed; inspect redacted diagnostics.",
+                        null
+                    )
+                }
+            }
+        }
+    }
+
 
     fun register(messenger: BinaryMessenger, context: android.content.Context) {
         appContext = context.applicationContext
@@ -73,10 +100,10 @@ object PvxrayPlugin : MethodChannel.MethodCallHandler {
         }
         try {
             when (call.method) {
-                "version" -> result.success(PvxrayBridge.version())
-                "validate" -> {
+                "version" -> runNative(result) { PvxrayBridge.version() }
+                "validate" -> runNative(result) {
                     PvxrayBridge.validate(call.argument<String>("config") ?: "")
-                    result.success(true)
+                    true
                 }
                 "start" -> {
                     if (VpnService.prepare(appContext) != null) {
@@ -108,20 +135,20 @@ object PvxrayPlugin : MethodChannel.MethodCallHandler {
                         .setAction(PVVpnService.ACTION_STOP)
                     appContext!!.startService(intent)
                 }
-                "isRunning" -> result.success(PvxrayBridge.isRunning())
-                "queryUplink" -> result.success(PvxrayBridge.queryUplink())
-                "queryDownlink" -> result.success(PvxrayBridge.queryDownlink())
-                "resetStats" -> {
+                "isRunning" -> runNative(result) { PvxrayBridge.isRunning() }
+                "queryUplink" -> runNative(result) { PvxrayBridge.queryUplink() }
+                "queryDownlink" -> runNative(result) { PvxrayBridge.queryDownlink() }
+                "resetStats" -> runNative(result) {
                     PvxrayBridge.resetStats()
-                    result.success(true)
+                    true
                 }
-                "measureDelay" -> result.success(PvxrayBridge.measureDelay(call.argument<String>("url") ?: ""))
-                "initEnvironment" -> {
+                "measureDelay" -> runNative(result) { PvxrayBridge.measureDelay(call.argument<String>("url") ?: "") }
+                "initEnvironment" -> runNative(result) {
                     PvxrayBridge.initEnvironment(
                         call.argument<String>("assets") ?: "",
                         call.argument<String>("config") ?: ""
                     )
-                    result.success(true)
+                    true
                 }
                 "prepare" -> {
                     val intent = VpnService.prepare(appContext)
