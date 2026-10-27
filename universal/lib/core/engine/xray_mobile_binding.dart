@@ -61,12 +61,12 @@ class MethodChannelXrayBinding implements XrayMobileBinding {
   }
 
   @override
-  Future<String> version() async => (await _channel.invokeMethod<String>('version')) ?? '';
+  Future<String> version() async => (await channel.invokeMethod<String>('version')) ?? '';
 
   @override
   Future<bool> validateConfig(String config) async {
     try {
-      return (await _channel.invokeMethod<bool>('validate', {'config': config})) ?? false;
+      return (await channel.invokeMethod<bool>('validate', {'config': config})) ?? false;
     } on PlatformException {
       return false;
     }
@@ -79,7 +79,7 @@ class MethodChannelXrayBinding implements XrayMobileBinding {
   static const nativeStopTimeout = Duration(seconds: 12);
 
   Future<void> _invokeStart(String config, int tunFd) async {
-    await _channel
+    await channel
         .invokeMethod<void>('start', {'config': config, 'tunFd': tunFd})
         .timeout(startTimeout);
   }
@@ -104,30 +104,30 @@ class MethodChannelXrayBinding implements XrayMobileBinding {
   }
 
   @override
-  Future<bool> prepare() async => (await _channel.invokeMethod<bool>('prepare')) ?? false;
+  Future<bool> prepare() async => (await channel.invokeMethod<bool>('prepare')) ?? false;
 
   @override
   Future<void> stop() =>
-      _channel.invokeMethod<void>('stop').timeout(stopTimeout);
+      channel.invokeMethod<void>('stop').timeout(stopTimeout);
 
   @override
-  Future<bool> isRunning() async => (await _channel.invokeMethod<bool>('isRunning')) ?? false;
+  Future<bool> isRunning() async => (await channel.invokeMethod<bool>('isRunning')) ?? false;
 
   @override
-  Future<int> queryUplink() async => (await _channel.invokeMethod<int>('queryUplink')) ?? 0;
+  Future<int> queryUplink() async => (await channel.invokeMethod<int>('queryUplink')) ?? 0;
 
   @override
-  Future<int> queryDownlink() async => (await _channel.invokeMethod<int>('queryDownlink')) ?? 0;
+  Future<int> queryDownlink() async => (await channel.invokeMethod<int>('queryDownlink')) ?? 0;
 
   @override
-  Future<void> resetStats() => _channel.invokeMethod<void>('resetStats');
+  Future<void> resetStats() => channel.invokeMethod<void>('resetStats');
 
   @override
-  Future<int> measureDelay(String url) async => (await _channel.invokeMethod<int>('measureDelay', {'url': url})) ?? -1;
+  Future<int> measureDelay(String url) async => (await channel.invokeMethod<int>('measureDelay', {'url': url})) ?? -1;
 
   @override
   Future<void> initEnvironment(String assetLocation, String configLocation) =>
-      _channel.invokeMethod<void>('initEnvironment', {'assets': assetLocation, 'config': configLocation});
+      channel.invokeMethod<void>('initEnvironment', {'assets': assetLocation, 'config': configLocation});
 }
 
 /// Fallback for platforms without the native pvxray handler: every call
