@@ -5,7 +5,6 @@ import (
         "net/http"
         "net/url"
         "os"
-        "strconv"
         "strings"
         "sync"
         "time"
@@ -40,10 +39,6 @@ import (
         _ "github.com/xtls/xray-core/transport/internet/udp"
         _ "github.com/xtls/xray-core/transport/internet/websocket"
 )
-
-// healthInboundPort is the fixed local HTTP inbound PVNetwork's generated
-// configs expose for latency probing (contract with XrayConfigBuilder).
-const healthInboundPort = 19670
 
 var (
         mu       sync.Mutex
@@ -187,16 +182,12 @@ func ResetStats() {
         }
 }
 
-// MeasureDelay probes url through the RUNNING instance's health-in HTTP
-// inbound (127.0.0.1:<healthInboundPort>), whose traffic is routed through
-// the 'proxy' outbound. Returns milliseconds, or -1 when the core is not
-// running or the probe fails. The caller owns the URL contract (typically
-// an HTTP 204 endpoint).
-func MeasureDelay(url string) int64 {
-        if !IsRunning() {
-                return -1
-        }
-        return probeThroughProxy("http://127.0.0.1:" + strconv.Itoa(healthInboundPort), url)
+// MeasureDelay is intentionally unavailable until a secure authenticated
+// probe path is available. The previous localhost HTTP proxy accepted any
+// local application and could bypass per-app routing. Never reopen that port
+// merely to display latency. Return -1 so the UI displays an unknown value.
+func MeasureDelay(_ string) int64 {
+        return -1
 }
 
 // MeasureDirectDelay probes url without any proxy (control measurement for
