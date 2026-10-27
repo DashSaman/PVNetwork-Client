@@ -13,6 +13,9 @@ class FakeBinding implements XrayMobileBinding {
   int startCalls = 0;
   int stopCalls = 0;
   int? simulatedLatency;
+  bool failAfterStart = false;
+  bool failStop = false;
+  bool failResetStats = false;
 
   @override
   String get bindingId => 'fake';
@@ -34,11 +37,13 @@ class FakeBinding implements XrayMobileBinding {
     if (!available) throw StateError('native core missing');
     startCalls++;
     started = true;
+    if (failAfterStart) throw StateError('partially initialized');
   }
 
   @override
   Future<void> stop() async {
     stopCalls++;
+    if (failStop) throw StateError('native stop failed');
     started = false;
   }
 
@@ -52,7 +57,9 @@ class FakeBinding implements XrayMobileBinding {
   Future<int> queryDownlink() async => started ? 900 : 0;
 
   @override
-  Future<void> resetStats() async {}
+  Future<void> resetStats() async {
+    if (failResetStats) throw StateError('stats unavailable');
+  }
 
   @override
   Future<int> measureDelay(String url) async => started ? (simulatedLatency ?? 42) : -1;
@@ -134,6 +141,40 @@ void main() {
     expect(stats.latencyMs, isNull);
     await adapter.stop();
     expect(await adapter.healthCheck(), isFalse);
+    await adapter.dispose();
+  });
+
+  test('partial native start failure invokes stop for cleanup', () async {
+    final binding = FakeBinding()..failAfterStart = true;
+    final adapter = xrayAdapterForTest(binding);
+    await expectLater(adapter.start(vlessProfile()), throwsStateError);
+    expect(binding.stopCalls, 1);
+    expect(binding.started, isFalse);
+    expect(adapter.state, VpnConnectionState.error);
+    await adapter.dispose();
+  });
+
+  test('stop failure must not claim disconnected', () async {
+    final binding = FakeBinding();
+    final adapter = xrayAdapterForTest(binding);
+    await adapter.start(vlessProfile());
+    binding.failStop = true;
+    await expectLater(adapter.stop(), throwsStateError);
+    expect(adapter.state, VpnConnectionState.error);
+    expect(binding.started, isTrue);
+    binding.failStop = false;
+    await adapter.stop();
+    expect(adapter.state, VpnConnectionState.disconnected);
+    await adapter.dispose();
+  });
+
+  test('unavailable statistics reset does not break running session', () async {
+    final binding = FakeBinding()..failResetStats = true;
+    final adapter = xrayAdapterForTest(binding);
+    await adapter.start(vlessProfile());
+    expect(binding.started, isTrue);
+    expect(adapter.state, VpnConnectionState.connected);
+    await adapter.stop();
     await adapter.dispose();
   });
 
