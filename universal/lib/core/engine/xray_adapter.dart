@@ -26,6 +26,9 @@ class XrayAdapter implements VpnCoreAdapter {
   VpnConnectionState _state = VpnConnectionState.disconnected;
   DateTime? _startedAt;
   int? _lastLatencyMs;
+  DateTime? _lastLatencyProbeAt;
+  Future<int>? _latencyProbe;
+  int _latencyEpoch = 0;
   String? _lastError;
 
   /// Control endpoint used by the host UI (generate_204 probe).
@@ -64,7 +67,7 @@ class XrayAdapter implements VpnCoreAdapter {
     return VpnCoreCapabilities(
       engine: 'xray-core',
       protocols: Set<String>.from(XrayConfigBuilder.supportedProtocols),
-      features: const <String>{'tun', 'stats', 'reality', 'shadowsocks'},
+      features: const <String>{'tun', 'stats', 'measureDelay', 'reality', 'shadowsocks'},
       version: version,
     );
   }
@@ -108,6 +111,9 @@ class XrayAdapter implements VpnCoreAdapter {
   Future<void> start(PVProfile profile) async {
     if (_state == VpnConnectionState.connecting || _state == VpnConnectionState.connected) return;
     _lastError = null;
+    ++_latencyEpoch;
+    _lastLatencyMs = null;
+    _lastLatencyProbeAt = null;
     _transition(VpnConnectionState.connecting);
     try {
       final resolved = await normalizeProfile(profile);
@@ -134,6 +140,9 @@ class XrayAdapter implements VpnCoreAdapter {
         // The caller must retry stop if the platform still owns a tunnel.
       }
       _startedAt = null;
+      ++_latencyEpoch;
+      _lastLatencyMs = null;
+      _lastLatencyProbeAt = null;
       _lastError = safeVpnError(e);
       _transition(VpnConnectionState.error, message: _lastError);
       rethrow;
@@ -144,6 +153,9 @@ class XrayAdapter implements VpnCoreAdapter {
   Future<void> stop() async {
     if (_state == VpnConnectionState.disconnected) return;
     _transition(VpnConnectionState.disconnecting);
+    ++_latencyEpoch;
+    _lastLatencyMs = null;
+    _lastLatencyProbeAt = null;
     try {
       await _binding.stop();
       _startedAt = null;
@@ -161,9 +173,41 @@ class XrayAdapter implements VpnCoreAdapter {
     await start(profile);
   }
 
-  /// Measures the live proxy latency through the running core. Returns -1
-  /// when the core is down or the probe fails.
+  /// Measures actual HTTPS through the active Xray outbound. This is not an
+  /// unauthenticated localhost listener or a "ping" to the upstream server.
   Future<int> measureDelay() async => _binding.measureDelay(probeUrl);
+
+  /// Traffic statistics update every 3s. Limit HTTPS probes to one each 30s
+  /// and coalesce concurrent polling to conserve battery and prevent extra
+  /// upstream traffic after a foreground/background transition.
+  Future<int> _latencyForStatistics() async {
+    final pending = _latencyProbe;
+    if (pending != null) return pending;
+    final last = _lastLatencyProbeAt;
+    if (last != null &&
+        DateTime.now().difference(last) < const Duration(seconds: 30)) {
+      return _lastLatencyMs ?? -1;
+    }
+    final epoch = _latencyEpoch;
+    final future = measureDelay();
+    _latencyProbe = future;
+    try {
+      final latency = await future;
+      if (epoch == _latencyEpoch) {
+        _lastLatencyMs = latency;
+        _lastLatencyProbeAt = DateTime.now();
+      }
+      return epoch == _latencyEpoch ? latency : -1;
+    } catch (_) {
+      if (epoch == _latencyEpoch) {
+        _lastLatencyMs = -1;
+        _lastLatencyProbeAt = DateTime.now();
+      }
+      return -1;
+    } finally {
+      if (identical(_latencyProbe, future)) _latencyProbe = null;
+    }
+  }
 
   @override
   Future<bool> healthCheck() => _binding.isRunning();
@@ -179,7 +223,7 @@ class XrayAdapter implements VpnCoreAdapter {
 
   @override
   Future<VpnCoreStatistics> getStatistics() async {
-    final latency = _lastLatencyMs = await measureDelay();
+    final latency = await _latencyForStatistics();
     return VpnCoreStatistics(
       uploadBytes: await _binding.queryUplink(),
       downloadBytes: await _binding.queryDownlink(),
