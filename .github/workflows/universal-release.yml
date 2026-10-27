@@ -100,6 +100,30 @@ jobs:
           path: dist/PVNetwork-Android-dev.apk
           if-no-files-found: error
 
+  android_emulator_smoke:
+    name: Android emulator launch smoke (not VPN E2E)
+    needs: android
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: pvnetwork-android-dev
+          path: dist
+      - name: Enable KVM for emulator runner
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Install and smoke-test actual Android APK
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: '35'
+          target: google_apis
+          arch: x86_64
+          emulator-boot-timeout: 600
+          script: bash scripts/android_emulator_smoke.sh dist/PVNetwork-Android-dev.apk
+
   windows:
     name: Windows x64
     runs-on: windows-latest
