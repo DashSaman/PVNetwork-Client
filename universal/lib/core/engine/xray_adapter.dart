@@ -82,7 +82,7 @@ class XrayAdapter implements VpnCoreAdapter {
       if (missing.isNotEmpty) issues.add('Protocol(s) not supported by Xray: ${missing.join(', ')}.');
     }
     try {
-      final config = _builder.build(profile);
+      final config = _builder.build(await normalizeProfile(profile));
       if (!await _binding.validateConfig(config)) {
         issues.add('Xray rejected the generated configuration.');
       }
