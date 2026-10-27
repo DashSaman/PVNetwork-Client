@@ -90,6 +90,19 @@ func TestStartRejectsNegativeTunFD(t *testing.T) {
         }
 }
 
+func TestMeasureDelayRejectsArbitraryProbeURLs(t *testing.T) {
+        for _, uri := range []string{
+                "http://127.0.0.1:8080/",
+                "http://169.254.169.254/latest/meta-data/",
+                "https://www.gstatic.com/generate_204?unexpected=1",
+                "https://evil.example/generate_204",
+        } {
+                if got := MeasureDelay(uri); got != -1 {
+                        t.Fatalf("unapproved probe %q returned %d, want -1", uri, got)
+                }
+        }
+}
+
 func TestMeasureDelayWithoutInstance(t *testing.T) {
         if IsRunning() {
                 t.Skip("another test left the core running")
