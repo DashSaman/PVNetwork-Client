@@ -114,6 +114,7 @@ class XrayAdapter implements VpnCoreAdapter {
     ++_latencyEpoch;
     _lastLatencyMs = null;
     _lastLatencyProbeAt = null;
+    _latencyProbe = null;
     _transition(VpnConnectionState.connecting);
     try {
       final resolved = await normalizeProfile(profile);
@@ -143,6 +144,7 @@ class XrayAdapter implements VpnCoreAdapter {
       ++_latencyEpoch;
       _lastLatencyMs = null;
       _lastLatencyProbeAt = null;
+      _latencyProbe = null;
       _lastError = safeVpnError(e);
       _transition(VpnConnectionState.error, message: _lastError);
       rethrow;
@@ -156,6 +158,7 @@ class XrayAdapter implements VpnCoreAdapter {
     ++_latencyEpoch;
     _lastLatencyMs = null;
     _lastLatencyProbeAt = null;
+    _latencyProbe = null;
     try {
       await _binding.stop();
       _startedAt = null;
