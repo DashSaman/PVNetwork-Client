@@ -53,3 +53,7 @@ Do not publish another user-facing release merely because the UI builds. The nex
 - Competitor benchmark and full feature acceptance backlog: docs/audits/2026-10-27-COMPETITOR-PARITY.md.
 - New P0 review item: local unauthenticated HTTP health proxy accessible at 127.0.0.1:19670 and routed into the proxy outbound. Must be disabled/isolated and device-tested before public release.
 - No production-readiness or verified device connection claim was added; application code unchanged during this audit.
+
+## Product feature baseline — 2026-10-27
+
+Feature inventory expanded to 503 individually trackable requested capabilities across 25 areas. See `docs/product/PVNETWORK_UNIVERSAL_FEATURE_MASTER_2026-10-27.md`. This is backlog only; no functionality is newly built or device-verified by the catalog update. All capability checkbox gates remain open unless separate evidence establishes success. Prioritize CI/safety and one actual device tunnel before broad feature parity.
