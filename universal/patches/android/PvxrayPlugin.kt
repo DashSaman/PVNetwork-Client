@@ -80,6 +80,9 @@ object PvxrayPlugin : MethodChannel.MethodCallHandler {
                     appContext!!.startForegroundService(intent)
                 }
                 "stop" -> {
+                    // Release a Dart caller waiting for native start before
+                    // issuing stop. A later service callback will be ignored.
+                    reportStartFailure("VPN connection was cancelled.")
                     val intent = Intent(appContext, PVVpnService::class.java).setAction(PVVpnService.ACTION_STOP)
                     appContext!!.startService(intent)
                     result.success(true)
@@ -119,6 +122,10 @@ object PvxrayPlugin : MethodChannel.MethodCallHandler {
                 else -> result.notImplemented()
             }
         } catch (t: Throwable) {
+            // A failed foreground-service launch must not leave pendingStart
+            // permanently occupied, otherwise every retry reports busy.
+            if (pendingStart === result) pendingStart = null
+            if (pendingPrepare === result) pendingPrepare = null
             result.error("core-error", t.message ?: t.javaClass.simpleName, null)
         }
     }
