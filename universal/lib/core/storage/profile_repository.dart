@@ -60,6 +60,26 @@ class ProfileRepository {
     return secrets.read(ref);
   }
 
+  /// Keeps imported configuration material out of the serialized profile.
+  /// The URI may contain UUIDs/passwords; subscription URLs can contain
+  /// bearer tokens. These must not be included in JSON backups/logs.
+  Future<PVProfile> secureImportedProfile(PVProfile profile) async {
+    final refs = Map<String, String>.of(profile.secretRefs);
+    final rawRef = await writeProfileSecret(profile, 'rawSource', profile.rawSource);
+    refs['rawSource'] = rawRef;
+    String? subscription = profile.subscriptionUrl;
+    if (subscription != null && subscription.isNotEmpty) {
+      final subRef = await writeProfileSecret(profile, 'subscriptionUrl', subscription);
+      refs['subscriptionUrl'] = subRef;
+      subscription = r'$ref{subscriptionUrl}';
+    }
+    return profile.copyWith(
+      rawSource: r'$ref{rawSource}',
+      subscriptionUrl: subscription,
+      secretRefs: refs,
+    );
+  }
+
   /// Deletes every secret attached to [profile] (call on profile removal).
   Future<void> deleteProfileSecrets(PVProfile profile) async {
     // Delete references explicitly so backends that cannot enumerate keys
@@ -76,11 +96,13 @@ class ProfileRepository {
   Future<PVProfile> resolveSecrets(PVProfile profile) async {
     if (profile.secretRefs.isEmpty) return profile;
     var raw = profile.rawSource;
+    var subscription = profile.subscriptionUrl;
     for (final field in profile.secretRefs.keys) {
       final value = await readProfileSecret(profile, field);
       if (value == null) continue;
       raw = raw.replaceAll('\$ref{$field}', value);
+      subscription = subscription?.replaceAll('\$ref{$field}', value);
     }
-    return raw == profile.rawSource ? profile : profile.copyWith(rawSource: raw);
+    return profile.copyWith(rawSource: raw, subscriptionUrl: subscription);
   }
 }
