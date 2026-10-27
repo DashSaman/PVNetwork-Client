@@ -140,25 +140,35 @@ class PVVpnService : VpnService() {
         ++generation
         clearDeadline()
         PvxrayPlugin.reportStartFailure("VPN connection was cancelled.")
+        if (destroying) {
+            PvxrayPlugin.reportStopCompleted(false)
+            return
+        }
         worker.execute {
-            cleanupNative()
-            main.post { stopSelfResult(startId) }
+            val clean = cleanupNative()
+            main.post {
+                PvxrayPlugin.reportStopCompleted(clean)
+                if (startId > 0) stopSelfResult(startId) else stopSelf()
+            }
         }
     }
 
     /** Called exclusively on the worker after native start has settled. */
-    private fun cleanupNative() {
+    private fun cleanupNative(): Boolean {
+        var clean = true
         try {
             PvxrayBridge.stop()
         } catch (_: Throwable) {
-            // Still attempt to release the OS TUN interface.
+            clean = false
         } finally {
             try {
                 tun?.close()
             } catch (_: Throwable) {
+                clean = false
             }
             tun = null
         }
+        return clean
     }
 
     private fun clearDeadline() {
@@ -176,6 +186,7 @@ class PVVpnService : VpnService() {
         ++generation
         clearDeadline()
         PvxrayPlugin.reportStartFailure("VPN service was destroyed.")
+        PvxrayPlugin.reportStopCompleted(false)
         // Never block the main thread waiting for a possibly stuck native
         // call. Enqueue cleanup and allow the worker to drain once it returns.
         worker.execute { cleanupNative() }
