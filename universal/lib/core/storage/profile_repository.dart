@@ -30,8 +30,8 @@ class ProfileRepository {
       return <PVProfile>[];
     }
     final migrated = await protectLegacyProfiles(decoded);
-    if (migrated.any((profile) =>
-        !identical(profile, decoded.firstWhere((p) => p.id == profile.id)))) {
+    if (List<int>.generate(decoded.length, (i) => i)
+        .any((i) => !identical(migrated[i], decoded[i]))) {
       // Persist only after EVERY sensitive field was moved to SecretStore.
       await saveProfiles(migrated);
     }
