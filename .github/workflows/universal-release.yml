@@ -26,8 +26,35 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  xray_config_contract:
+    name: Pinned Xray / Flutter config contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.0'
+          cache: false
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.4'
+          channel: stable
+          cache: true
+      - name: Generate seven synthetic Flutter client configs
+        working-directory: universal
+        run: |
+          flutter pub get
+          dart run tool/export_xray_fixtures.dart ../core/xray-mobile/config-fixtures
+          test "$(find ../core/xray-mobile/config-fixtures -name '*.json' | wc -l)" -eq 7
+      - name: Validate configs with pinned Xray
+        working-directory: core/xray-mobile
+        run: |
+          go mod tidy
+          PV_REQUIRE_XRAY_FIXTURES=1 go test ./pvxray -run TestPVNetworkGeneratedConfigsAgainstPinnedCore -v
+
   android:
     name: Android APK
+    needs: xray_config_contract
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
