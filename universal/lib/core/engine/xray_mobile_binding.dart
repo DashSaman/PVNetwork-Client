@@ -66,17 +66,31 @@ class MethodChannelXrayBinding implements XrayMobileBinding {
     }
   }
 
+  /// Timeout bounds Flutter's wait for the native service. It does not
+  /// forcibly terminate native Go calls; the Android worker must clean up
+  /// once those calls return. Never interpret a timeout as DISCONNECTED.
+  static const nativeStartTimeout = Duration(seconds: 25);
+  static const nativeStopTimeout = Duration(seconds: 12);
+
+  Future<void> _invokeStart(String config, int tunFd) async {
+    await _channel
+        .invokeMethod<void>('start', {'config': config, 'tunFd': tunFd})
+        .timeout(nativeStartTimeout);
+  }
+
   @override
   Future<void> start(String config, {int tunFd = -1}) async {
     try {
-      await _channel.invokeMethod<void>('start', {'config': config, 'tunFd': tunFd});
+      await _invokeStart(config, tunFd);
     } on PlatformException catch (e) {
       if (e.code == 'vpn-permission') {
+        // Permission UI can remain open until the user decides. Only the
+        // native startup after permission is bounded.
         final granted = await prepare();
         if (!granted) {
           throw StateError('VPN permission was denied; the tunnel cannot start.');
         }
-        await _channel.invokeMethod<void>('start', {'config': config, 'tunFd': tunFd});
+        await _invokeStart(config, tunFd);
         return;
       }
       rethrow;
@@ -87,7 +101,8 @@ class MethodChannelXrayBinding implements XrayMobileBinding {
   Future<bool> prepare() async => (await _channel.invokeMethod<bool>('prepare')) ?? false;
 
   @override
-  Future<void> stop() => _channel.invokeMethod<void>('stop');
+  Future<void> stop() =>
+      _channel.invokeMethod<void>('stop').timeout(nativeStopTimeout);
 
   @override
   Future<bool> isRunning() async => (await _channel.invokeMethod<bool>('isRunning')) ?? false;
