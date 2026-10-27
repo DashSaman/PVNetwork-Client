@@ -57,3 +57,18 @@ Status legend: `[x]` done · `[~]` in progress · `[ ]` open. Update this table 
 - [ ] D3 Ship `geoip.dat`/`geosite.dat` assets for `bypassIR` routing (copy-to-app-data + `InitEnvironment` wiring)
 - [ ] D4 Refresh stats latency probe path with `measureDelay` from the UI (manual "test latency" affordance)
 - [ ] D5 Update `docs/PROJECT_STATE.md` + `docs/KNOWN_ISSUES.md` with the run IDs and outcomes; only then update release naming per the release rule
+
+
+### Stage 0 — universal client reliability/security (2026-10-27; PR #1, IN PROGRESS)
+
+- [~] S0-1 Replace broken Android AGP9 file-picker implementation; CI Android APK proof pending.
+- [~] S0-2 Always build required Xray native AAR from exact checkout and verify checksum/class rather than downloading an unrelated CI artifact; current pull-request run pending.
+- [~] S0-3 Prevent app UID outbound VPN loop via `VpnService.Builder.addDisallowedApplication(packageName)`; still requires on-device packet and per-app isolation tests.
+- [~] S0-4 Remove the unauthenticated HTTP proxy previously used to test latency; secure replacement probe pending. UI currently receives latency unavailable (-1), not fake success.
+- [~] S0-5 Protect newly imported raw configuration and subscription URL by encrypted SecretStore references; test added. Existing stored legacy profiles still require explicit safe migration.
+- [~] S0-6 Correct deletion of secret references including legacy namespace and validate resolved config; unit regression added.
+- [ ] S0-7 Android VPN real-device E2E proof: test TUN fd ownership, outbound socket exclusion, DNS/IPv6, link resilience and proper connected/disconnected state.
+- [ ] S0-8 Implement secure latency measurement, controller cancellation while connecting and multi-adapter lifecycle.
+- [ ] S0-9 Merge only after validated release gates and recorded CI/device receipts. PR: https://github.com/DashSaman/PVNetwork-Client/pull/1
+
+Do not promote any Stage 0 item from in-progress to PASS merely because source changed. Details: `docs/audits/2026-10-27-ANDROID-DEFECTS.md` and `docs/product/PVNETWORK_UNIVERSAL_FEATURE_MASTER_2026-10-27.md`.
