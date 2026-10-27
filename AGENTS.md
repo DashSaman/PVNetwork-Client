@@ -85,3 +85,13 @@ Do not promote any Stage 0 item from in-progress to PASS merely because source c
 - [ ] S1-7 Release gate: latest exact-SHA green CI + native APK package integrity + successful physical-device traffic/DNS/cleanup validation.
 
 **Never report a full feature PASS based only on source commits or the green old-sha CI receipt.**
+
+### Stage 2 resume pointer — 2026-10-27
+
+Authoritative latest technical handoff: `docs/CHECKPOINT_2026-10-27_STAGE2_NATIVE_LIFECYCLE.md`.
+
+- Stage-0/early Stage-1 source builds have an exact-SHA five-job PASS receipt (`40429012502`); initial native worker start design also passed (`40431948797`).
+- Later Stage-2 source changes require a **new exact-head** CI PASS, including the newly added Android emulator smoke job. In-progress/cancelled runs are not passes.
+- Native service start/stop now run on serial background worker; native Stop completion waits for worker cleanup; false DISCONNECTED is blocked; legacy credentials and active profile deletion guards have regression tests.
+- Latest change includes Android emulator boot/startup smoke. This does **not** validate a working VPN; the full 24-case device acceptance remains open.
+- Exact next action: inspect latest PR CI logs, fix any errors, and then test real-device VPN egress/DNS/IPv6/FD lifecycle with an authorized disposable endpoint. Do not merge this draft PR based solely on compiler success.
