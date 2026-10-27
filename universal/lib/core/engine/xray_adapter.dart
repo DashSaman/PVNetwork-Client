@@ -2,6 +2,7 @@ import 'dart:async';
 
 import '../model/pv_profile.dart';
 import '../storage/profile_repository.dart';
+import '../security/safe_error.dart';
 import 'vpn_core_adapter.dart';
 import 'xray_config_builder.dart';
 import 'xray_mobile_binding.dart';
@@ -87,9 +88,9 @@ class XrayAdapter implements VpnCoreAdapter {
         issues.add('Xray rejected the generated configuration.');
       }
     } on FormatException catch (e) {
-      issues.add(e.message);
+      issues.add(sanitizeVpnText(e.message));
     } catch (e) {
-      issues.add('Validation failed: $e');
+      issues.add('Validation failed: ${safeVpnError(e)}');
     }
     return issues;
   }
@@ -133,7 +134,7 @@ class XrayAdapter implements VpnCoreAdapter {
         // The caller must retry stop if the platform still owns a tunnel.
       }
       _startedAt = null;
-      _lastError = e.toString();
+      _lastError = safeVpnError(e);
       _transition(VpnConnectionState.error, message: _lastError);
       rethrow;
     }
