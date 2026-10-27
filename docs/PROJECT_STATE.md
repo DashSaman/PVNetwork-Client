@@ -69,3 +69,14 @@ Feature inventory expanded to 503 individually trackable requested capabilities 
 - New imports put raw config and subscription URL in SecretStore references; explicit deletion, legacy prefix and resolved-config validation corrected; regression tests committed.
 - GitHub PR CI is RUNNING as of the in-chat review; first observed Linux result success. No Android APK pass or on-device VPN validation claimed yet.
 - Safe follow-on: real device handshake/packet traces, native fd resource ownership, controller cancellation, legacy profile migration, Android signing/Store rules and secure latency probes.
+
+
+## 2026-10-27 Stage 1 implementation follow-on (PR #1 remains DRAFT)
+
+- Full five-job PR CI at `40425906428`: **SUCCESS** at commit `7f5a23f5d2a99cbb2fbc101134069a1feb9f6460`. This is a build proof, not real VPN connectivity. Native AAR found to export `pvxray.Pvxray`.
+- Subsequently found a genuine startup blocker: Android bridge was reflectively looking up wrong package names; switched it to direct Java class linkage against `pvxray.Pvxray` and fail-closed native packaging.
+- Controller lifecycle operation queue, cancel while connecting, active engine switching and stale event/stat rejection added, with unit tests. Native start hangs still need device-level bounded timeout and cancellation.
+- Imported legacy profiles now migrate sensitive raw URIs/subscription tokens to SecretStore references on read, idempotently, with regression tests.
+- Android plugin releases waiting startup result on stop/errors; UI Cancel is no longer disabled while CONNECTING.
+- Dedicated real-device gate `docs/ANDROID_REAL_DEVICE_ACCEPTANCE_2026-10-27.md` defines 24 checks. No physical device or authorized server was accessible via the GitHub connector, so none was falsely marked passed.
+- CI result for **latest branch head including compile-time native bridge** must be consulted before merge; prior green CI at an earlier SHA is not an approval to publish.
