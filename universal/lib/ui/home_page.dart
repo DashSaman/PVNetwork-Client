@@ -104,6 +104,14 @@ class HomePage extends StatelessWidget {
                 _line(Icons.dns_outlined, 'Server', profile?.endpoint ?? '—'),
                 _line(Icons.security_outlined, 'Protocol', profile?.protocol ?? '—'),
                 _line(Icons.speed, 'Latency', stats?.latencyMs != null && stats!.latencyMs! > 0 ? '${stats.latencyMs} ms' : '—'),
+                _line(
+                  Icons.verified_outlined,
+                  'Proxy data path',
+                  state == PVLinkState.connected && stats?.latencyMs != null &&
+                          stats!.latencyMs! >= 0
+                      ? 'HTTPS probe verified'
+                      : 'Not verified',
+                ),
                 _line(Icons.swap_vert, 'Traffic', stats == null ? '—' : '↑ ${humanBytes(stats.uploadBytes)}  ↓ ${humanBytes(stats.downloadBytes)}'),
                 _line(Icons.public, 'Engine', adapter?.id ?? '—'),
               ]),
