@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vpn/controller.dart';
 import 'package:vpn/core/engine/vpn_core_adapter.dart';
@@ -14,6 +16,7 @@ class FakeBinding implements XrayMobileBinding {
   int stopCalls = 0;
   int? simulatedLatency;
   int delayProbeCalls = 0;
+  Completer<int>? pendingDelay;
   bool failAfterStart = false;
   bool failStop = false;
   bool failResetStats = false;
@@ -65,6 +68,8 @@ class FakeBinding implements XrayMobileBinding {
   @override
   Future<int> measureDelay(String url) async {
     delayProbeCalls++;
+    final delayed = pendingDelay;
+    if (delayed != null) return delayed.future;
     return started ? (simulatedLatency ?? 42) : -1;
   }
 
@@ -151,6 +156,32 @@ void main() {
     await adapter.getStatistics();
     expect(binding.delayProbeCalls, 2,
         reason: 'a new VPN session must measure fresh outbound latency');
+    await adapter.stop();
+    await adapter.dispose();
+  });
+
+  test('a slow probe from a previous VPN session never certifies the next', () async {
+    final oldDelay = Completer<int>();
+    final binding = FakeBinding()..pendingDelay = oldDelay;
+    final adapter = xrayAdapterForTest(binding);
+    await adapter.start(vlessProfile());
+    final previous = adapter.getStatistics();
+    await Future<void>.delayed(Duration.zero);
+    expect(binding.delayProbeCalls, 1);
+
+    await adapter.stop();
+    binding.pendingDelay = null;
+    await adapter.start(vlessProfile());
+    final fresh = await adapter.getStatistics();
+    expect(fresh.latencyMs, 42);
+    expect(binding.delayProbeCalls, 2);
+
+    oldDelay.complete(100);
+    final expired = await previous;
+    expect(expired.latencyMs, isNull,
+        reason: 'old session cannot publish a verified result');
+    final current = await adapter.getStatistics();
+    expect(current.latencyMs, 42);
     await adapter.stop();
     await adapter.dispose();
   });
