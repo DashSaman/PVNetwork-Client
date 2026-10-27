@@ -14,6 +14,7 @@ import (
     "time"
 
     "github.com/xtls/xray-core/core"
+    _ "github.com/xtls/xray-core/proxy/vless/inbound"
 )
 
 // Reserve a test-only localhost port. These tests do not contact the Internet
