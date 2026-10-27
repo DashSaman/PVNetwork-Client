@@ -53,3 +53,7 @@ Builds are produced by GitHub Actions and stored under `releases/` after success
 
 ## License
 The Android networking base uses GPL-3.0 licensed SagerNet projects. PVNetwork branding and project-specific integration are maintained in this repository. Hiddify source code is not included.
+
+## Universal VPN product requirements (2026-10-27)
+
+The canonical comprehensive 503-item, 25-domain capability backlog for PVNetwork's multi-core universal VPN/proxy app is [PVNETWORK_UNIVERSAL_FEATURE_MASTER_2026-10-27.md](docs/product/PVNETWORK_UNIVERSAL_FEATURE_MASTER_2026-10-27.md). It compares v2rayNG/v2rayN, Karing, Hiddify, FlClash/Clash Verge, Shadowrocket/Stash, NekoBox/NekoRay, OpenVPN Connect, WireGuard, AmneziaVPN, OpenConnect and PVNetwork customer-service integrations. It records *requested future capabilities*, not verified current support. Current blocking defects are in [the 2026-10-27 audit](docs/audits/2026-10-27-ANDROID-DEFECTS.md).
