@@ -13,6 +13,7 @@ class FakeBinding implements XrayMobileBinding {
   int startCalls = 0;
   int stopCalls = 0;
   int? simulatedLatency;
+  int delayProbeCalls = 0;
   bool failAfterStart = false;
   bool failStop = false;
   bool failResetStats = false;
@@ -62,7 +63,10 @@ class FakeBinding implements XrayMobileBinding {
   }
 
   @override
-  Future<int> measureDelay(String url) async => started ? (simulatedLatency ?? 42) : -1;
+  Future<int> measureDelay(String url) async {
+    delayProbeCalls++;
+    return started ? (simulatedLatency ?? 42) : -1;
+  }
 
   @override
   Future<void> initEnvironment(String assetLocation, String configLocation) async {}
@@ -129,6 +133,25 @@ void main() {
     expect(events, contains(VpnConnectionState.connected));
     expect(events, contains(VpnConnectionState.disconnected));
     await sub.cancel();
+    await adapter.dispose();
+  });
+
+  test('stats polling coalesces core HTTPS probe to at most once per 30 seconds', () async {
+    final binding = FakeBinding();
+    final adapter = xrayAdapterForTest(binding);
+    await adapter.start(vlessProfile());
+    for (var i = 0; i < 5; i++) {
+      final stats = await adapter.getStatistics();
+      expect(stats.latencyMs, 42);
+    }
+    expect(binding.delayProbeCalls, 1,
+        reason: '3-second stats refreshes must not generate 3-second HTTPS probes');
+    await adapter.stop();
+    await adapter.start(vlessProfile());
+    await adapter.getStatistics();
+    expect(binding.delayProbeCalls, 2,
+        reason: 'a new VPN session must measure fresh outbound latency');
+    await adapter.stop();
     await adapter.dispose();
   });
 
