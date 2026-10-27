@@ -215,11 +215,16 @@ class PVController extends ChangeNotifier {
         lastError = e.toString();
         linkState = PVLinkState.error;
         _notify();
+        await _adapterSubscription?.cancel();
+        _adapterSubscription = null;
         try {
           await chosen.stop();
+          _activeAdapter = null;
         } catch (_) {
-          // Original startup failure is retained for diagnostics.
+          // Retain the active adapter so the user can retry a failed stop.
         }
+        linkState = PVLinkState.error;
+        _notify();
       }
     });
   }
@@ -245,7 +250,7 @@ class PVController extends ChangeNotifier {
         if (_current(generation)) {
           await _adapterSubscription?.cancel();
           _adapterSubscription = null;
-          _activeAdapter = null;
+          if (stopError == null) _activeAdapter = null;
           lastError = stopError;
           linkState = stopError == null ? PVLinkState.disconnected : PVLinkState.error;
           _notify();
@@ -295,7 +300,8 @@ class PVController extends ChangeNotifier {
     _disposed = true;
     ++_intentGeneration;
     _statsTimer?.cancel();
-    unawaited(_adapterSubscription?.cancel());
+    final subscription = _adapterSubscription;
+    if (subscription != null) unawaited(subscription.cancel());
     super.dispose();
   }
 
