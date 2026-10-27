@@ -47,7 +47,7 @@ class PVVpnService : VpnService() {
         when (intent?.action) {
             ACTION_STOP -> requestStop(startId)
             ACTION_START -> {
-                val config = intent.getStringExtra(EXTRA_CONFIG)
+                val config = intent?.getStringExtra(EXTRA_CONFIG)
                 if (config.isNullOrBlank()) {
                     PvxrayPlugin.reportStartFailure("Empty VPN configuration.")
                     requestStop(startId)
