@@ -124,17 +124,38 @@ void main() {
 
   test('SOCKS outbound with credentials', () {
     final cfg = parse(profile('socks5://user:pass@10.0.0.3:1080'));
-    final server = cfg['outbounds'].first['settings']['servers'].first;
+    final server = cfg['outbounds'].first['settings'];
     expect(cfg['outbounds'].first['protocol'], 'socks');
     expect(server['address'], '10.0.0.3');
     expect(server['port'], 1080);
-    expect(server['users'].first['user'], 'user');
+    expect(server['user'], 'user');
+    expect(server['pass'], 'pass');
+  });
+
+  test('SOCKS password containing colons is preserved', () {
+    final cfg = parse(profile('socks5://user:long%3Apassword%3Awith%3Acolons@192.168.1.3:1080'));
+    final settings = cfg['outbounds'].first['settings'];
+    expect(settings['user'], 'user');
+    expect(settings['pass'], 'long:password:with:colons');
+  });
+
+  test('public unencrypted HTTP proxy is refused by default', () {
+    expect(
+      () => parse(profile('http://user:pw@proxy.example.com:3128')),
+      throwsFormatException,
+    );
+    final local = parse(profile('http://user:pw@192.168.1.8:3128'));
+    expect(local['outbounds'].first['settings']['port'], 3128);
   });
 
   test('HTTP(S) proxy outbound', () {
     final cfg = parse(profile('https://user:pw@corp.example.com:3128'));
     final out = cfg['outbounds'].first;
     expect(out['protocol'], 'http');
+    expect(out['settings']['address'], 'corp.example.com');
+    expect(out['settings']['user'], 'user');
+    expect(out['settings']['pass'], 'pw');
+    expect(out['settings'].containsKey('servers'), isFalse);
     expect(out['streamSettings']['security'], 'tls');
   });
 
