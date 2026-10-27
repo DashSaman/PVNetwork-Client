@@ -69,7 +69,9 @@ jobs:
           test -s core/xray-mobile/dist/pvxray.aar
           (cd core/xray-mobile && sha256sum -c dist/SHA256SUMS.txt)
           unzip -p core/xray-mobile/dist/pvxray.aar classes.jar > /tmp/pvxray-classes.jar
-          jar tf /tmp/pvxray-classes.jar | grep -E '/Pvxray.class$'
+          jar tf /tmp/pvxray-classes.jar | grep -Fx 'pvxray/Pvxray.class'
+          # Native ABI is part of the application contract, not an optional
+          # separately downloaded artifact.
           echo "Core source commit: $GITHUB_SHA"
           cat core/xray-mobile/dist/SHA256SUMS.txt
       - name: Generate Android host
@@ -87,6 +89,7 @@ jobs:
           flutter analyze
           flutter test
           flutter build apk --release
+          unzip -l build/app/outputs/flutter-apk/app-release.apk | grep -E 'lib/arm64-v8a/libgojni[.]so'
       - name: Package
         run: |
           mkdir -p dist
