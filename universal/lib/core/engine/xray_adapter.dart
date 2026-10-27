@@ -63,7 +63,7 @@ class XrayAdapter implements VpnCoreAdapter {
     return VpnCoreCapabilities(
       engine: 'xray-core',
       protocols: Set<String>.from(XrayConfigBuilder.supportedProtocols),
-      features: const <String>{'tun', 'stats', 'measureDelay', 'reality', 'shadowsocks'},
+      features: const <String>{'tun', 'stats', 'reality', 'shadowsocks'},
       version: version,
     );
   }
@@ -145,7 +145,7 @@ class XrayAdapter implements VpnCoreAdapter {
   Future<int> measureDelay() async => _binding.measureDelay(probeUrl);
 
   @override
-  Future<bool> healthCheck() async => await measureDelay() > 0;
+  Future<bool> healthCheck() => _binding.isRunning();
 
   @override
   Future<VpnConnectionState> getState() async {
@@ -163,7 +163,7 @@ class XrayAdapter implements VpnCoreAdapter {
       uploadBytes: await _binding.queryUplink(),
       downloadBytes: await _binding.queryDownlink(),
       startedAt: _startedAt,
-      latencyMs: latency,
+      latencyMs: latency > 0 ? latency : null,
     );
   }
 
