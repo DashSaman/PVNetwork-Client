@@ -99,10 +99,25 @@ class XrayConfigBuilder {
     final id = Uri.decodeComponent(u.userInfo);
     if (u.host.isEmpty || !u.hasPort || id.isEmpty) throw const FormatException('Incomplete VLESS profile.');
     final security = (q['security'] ?? 'none').toLowerCase();
+    final encryption = q['encryption'] ?? 'none';
+    // Upstream Xray requires transport security for public VLESS endpoints
+    // unless VLESS Encryption is explicitly enabled. A syntactically valid
+    // config is not necessarily a secure or usable connection.
+    if (security == 'none' && encryption == 'none' &&
+        !_isPrivateHost(u.host)) {
+      throw const FormatException(
+        'Unencrypted VLESS to a public server is refused. Use TLS, REALITY, '
+        'or matching VLESS Encryption configured by your provider.');
+    }
+    if ((q['flow'] ?? '').isNotEmpty && security == 'none' &&
+        encryption == 'none') {
+      throw const FormatException(
+        'XTLS flow requires a compatible secure VLESS configuration.');
+    }
     return {
       'tag': 'proxy',
       'protocol': 'vless',
-      'settings': {'address': u.host, 'port': u.port, 'id': id, 'encryption': q['encryption'] ?? 'none', if ((q['flow'] ?? '').isNotEmpty) 'flow': q['flow'], 'level': 0},
+      'settings': {'address': u.host, 'port': u.port, 'id': id, 'encryption': encryption, if ((q['flow'] ?? '').isNotEmpty) 'flow': q['flow'], 'level': 0},
       'streamSettings': _stream(u, security),
     };
   }
@@ -320,6 +335,28 @@ class XrayConfigBuilder {
       'off' || 'disabled' => 'off',
       _ => 'secure',
     };
+  }
+
+  static bool _isPrivateHost(String host) {
+    final normalized = host.toLowerCase();
+    if (normalized == 'localhost' || normalized == '::1') return true;
+    if (normalized.startsWith('fc') || normalized.startsWith('fd') ||
+        normalized.startsWith('fe80:')) {
+      // Restrict IPv6 prefix handling to literal addresses, not hostnames.
+      if (normalized.contains(':')) return true;
+    }
+    final pieces = host.split('.');
+    if (pieces.length != 4) return false;
+    final bytes = pieces.map(int.tryParse).toList();
+    if (bytes.any((value) => value == null || value < 0 || value > 255)) {
+      return false;
+    }
+    final first = bytes[0]!;
+    final second = bytes[1]!;
+    return first == 10 || first == 127 ||
+        (first == 172 && second >= 16 && second <= 31) ||
+        (first == 192 && second == 168) ||
+        (first == 169 && second == 254);
   }
 
   static String _hostOf(String hostPort) {
