@@ -12,6 +12,7 @@ class FakeBinding implements XrayMobileBinding {
   bool available = true;
   int startCalls = 0;
   int stopCalls = 0;
+  int? simulatedLatency;
 
   @override
   String get bindingId => 'fake';
@@ -54,7 +55,7 @@ class FakeBinding implements XrayMobileBinding {
   Future<void> resetStats() async {}
 
   @override
-  Future<int> measureDelay(String url) async => started ? 42 : -1;
+  Future<int> measureDelay(String url) async => started ? (simulatedLatency ?? 42) : -1;
 
   @override
   Future<void> initEnvironment(String assetLocation, String configLocation) async {}
@@ -121,6 +122,18 @@ void main() {
     expect(events, contains(VpnConnectionState.connected));
     expect(events, contains(VpnConnectionState.disconnected));
     await sub.cancel();
+    await adapter.dispose();
+  });
+
+  test('native running state is healthy even with unavailable probe delay', () async {
+    final binding = FakeBinding()..simulatedLatency = -1;
+    final adapter = xrayAdapterForTest(binding);
+    await adapter.start(vlessProfile());
+    expect(await adapter.healthCheck(), isTrue);
+    final stats = await adapter.getStatistics();
+    expect(stats.latencyMs, isNull);
+    await adapter.stop();
+    expect(await adapter.healthCheck(), isFalse);
     await adapter.dispose();
   });
 
