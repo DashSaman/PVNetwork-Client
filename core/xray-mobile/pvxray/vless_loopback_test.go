@@ -45,7 +45,17 @@ func localVlessServerConfig(port int) []byte {
             },
         }},
         "outbounds": []any{map[string]any{
-            "tag": "direct", "protocol": "freedom", "settings": map[string]any{},
+            "tag": "direct", "protocol": "freedom",
+            "settings": map[string]any{
+                // Exact pinned Xray blocks private-IP destinations reached
+                // from VLESS by default. Allow only the loopback test target
+                // inside this disposable CI server process. NEVER copy this
+                // exception into production customer server configurations.
+                "finalRules": []any{map[string]any{
+                    "action": "allow",
+                    "ip": []string{"127.0.0.1/32"},
+                }},
+            },
         }},
     }
     content, _ := json.Marshal(config)
