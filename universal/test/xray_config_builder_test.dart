@@ -43,6 +43,30 @@ void main() {
     expect(stream['realitySettings']['shortId'], 'ab');
   });
 
+  test('public unencrypted VLESS cannot silently become an unsafe tunnel', () {
+    expect(
+      () => parse(profile('vless://uuid@203.0.113.7:443?security=none')),
+      throwsFormatException,
+    );
+    expect(
+      () => parse(profile('vless://uuid@vpn.example.com:443?security=none')),
+      throwsFormatException,
+    );
+    final local = parse(profile('vless://uuid@192.168.1.1:443?security=none'));
+    expect(local['outbounds'].first['protocol'], 'vless');
+    final localV6 = parse(profile('vless://uuid@[fd00::1]:443?security=none'));
+    expect(localV6['outbounds'].first['protocol'], 'vless');
+    final encrypted = parse(profile('vless://uuid@vpn.example.com:443?security=none&encryption=mlkem768x25519plus.native.test'));
+    expect(encrypted['outbounds'].first['settings']['encryption'], isNot('none'));
+  });
+
+  test('XTLS flow without TLS, REALITY or VLESS encryption is refused', () {
+    expect(
+      () => parse(profile('vless://uuid@10.0.0.10:80?flow=xtls-rprx-vision&security=none')),
+      throwsFormatException,
+    );
+  });
+
   test('VLESS websocket TLS', () {
     final cfg = parse(profile('vless://uuid@h:443?security=tls&sni=h.example.com&type=ws&path=%2Fws&host=h.example.com'));
     final stream = cfg['outbounds'].first['streamSettings'];
