@@ -33,6 +33,7 @@ class StubCore implements VpnCoreAdapter {
   Completer<void>? releaseStart;
   Completer<VpnCoreStatistics>? statsResult;
   bool reportDisconnected = false;
+  bool failStop = false;
   int startCalls = 0;
   int stopCalls = 0;
   VpnConnectionState state = VpnConnectionState.disconnected;
@@ -73,6 +74,7 @@ class StubCore implements VpnCoreAdapter {
   @override
   Future<void> stop() async {
     stopCalls++;
+    if (failStop) throw StateError('Native stop failed');
     state = VpnConnectionState.disconnected;
     _events.add(const VpnCoreEvent(VpnConnectionState.disconnected));
   }
@@ -180,6 +182,44 @@ void main() {
     controller.dispose();
     await xray.dispose();
     await wireguard.dispose();
+  });
+
+  test('failed native stop prevents reconnect and profile switching', () async {
+    final xray = StubCore('xray-core');
+    final other = StubCore('wireguard');
+    final controller = PVController(MemoryRepository(), primaryAdapter: xray);
+    controller.registry.register(other);
+    controller.profiles.addAll([
+      fakeProfile('primary', 'xray'),
+      fakeProfile('secondary', 'wireguard'),
+    ]);
+    controller.selectedId = 'primary';
+
+    await controller.connect();
+    expect(xray.startCalls, 1);
+    xray.failStop = true;
+    await controller.disconnect();
+    expect(controller.linkState, PVLinkState.error);
+    expect(controller.activeAdapter, same(xray));
+
+    await controller.connect();
+    expect(xray.startCalls, 1);
+    expect(controller.lastError, contains('cleanup failed'));
+    await controller.switchProfile('secondary');
+    expect(controller.selectedId, 'primary');
+    expect(other.startCalls, 0);
+
+    xray.failStop = false;
+    await controller.disconnect();
+    expect(controller.linkState, PVLinkState.disconnected);
+    await controller.switchProfile('secondary');
+    expect(controller.selectedId, 'secondary');
+    await controller.connect();
+    expect(other.startCalls, 1);
+    await controller.disconnect();
+    controller.dispose();
+    await xray.dispose();
+    await other.dispose();
   });
 
   test('late traffic sample does not survive disconnect', () async {
