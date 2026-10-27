@@ -79,6 +79,7 @@ jobs:
           mkdir -p buildhost
           cp -R universal/lib buildhost/lib
           cp -R universal/test buildhost/test
+          cp -R universal/tool buildhost/tool
           cp universal/pubspec.yaml buildhost/pubspec.yaml
           TARGET=buildhost scripts/setup_host_projects.sh android
           sed -i 's/android:label="vpn"/android:label="PVNetwork"/' buildhost/android/app/src/main/AndroidManifest.xml
@@ -88,6 +89,10 @@ jobs:
           flutter pub get
           flutter analyze
           flutter test
+          # Generate real PVNetwork Dart client configs and reject any sample
+          # that the exact pinned native Xray core cannot parse.
+          dart run tool/export_xray_fixtures.dart ../core/xray-mobile/config-fixtures
+          (cd ../core/xray-mobile && PV_REQUIRE_XRAY_FIXTURES=1 go test ./pvxray -run TestPVNetworkGeneratedConfigsAgainstPinnedCore -v)
           flutter build apk --release
           unzip -l build/app/outputs/flutter-apk/app-release.apk | grep -E 'lib/arm64-v8a/libgojni[.]so'
       - name: Package
