@@ -10,8 +10,6 @@ import '../model/pv_profile.dart';
 class XrayConfigBuilder {
   const XrayConfigBuilder();
 
-  static const healthPort = 19670;
-
   /// Protocols this builder can generate real configs for.
   static const Set<String> supportedProtocols = <String>{
     'vless',
@@ -65,7 +63,6 @@ class XrayConfigBuilder {
           'settings': {'mtu': 1500, 'userLevel': 0},
           'sniffing': {'enabled': true, 'destOverride': ['http', 'tls']},
         },
-        {'tag': 'health-in', 'listen': '127.0.0.1', 'port': healthPort, 'protocol': 'http', 'settings': {}},
       ],
       'outbounds': [
         _outbound(p),
@@ -303,7 +300,6 @@ class XrayConfigBuilder {
 
   Map<String, dynamic> _routingBlock(String? routingPolicy, bool dnsOn) {
     final rules = <Map<String, dynamic>>[
-      {'type': 'field', 'inboundTag': ['health-in'], 'outboundTag': 'proxy'},
       if (dnsOn)
         {'type': 'field', 'port': 53, 'inboundTag': ['tun-in'], 'outboundTag': 'dns-out'},
       {'type': 'field', 'ip': privateCidrs, 'outboundTag': 'direct'},
