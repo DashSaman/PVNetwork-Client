@@ -38,6 +38,7 @@ func TestPVNetworkGeneratedConfigsAgainstPinnedCore(t *testing.T) {
         "shadowsocks-aead.json": {transport: "tcp", security: "", protocol: "shadowsocks"},
         "socks5-auth.json":     {transport: "tcp", security: "", protocol: "socks"},
         "https-proxy-auth.json": {transport: "tcp", security: "tls", protocol: "http"},
+        "vless-loopback.json":   {transport: "tcp", security: "", protocol: "vless"},
     }
     seen := make(map[string]bool, len(expected))
     for _, entry := range entries {
