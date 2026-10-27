@@ -45,7 +45,7 @@ jobs:
         run: |
           flutter pub get
           dart run tool/export_xray_fixtures.dart ../core/xray-mobile/config-fixtures
-          test "$(find ../core/xray-mobile/config-fixtures -name '*.json' | wc -l)" -eq 7
+          test "$(find ../core/xray-mobile/config-fixtures -name '*.json' | wc -l)" -eq 8
       - name: Validate configs with pinned Xray
         working-directory: core/xray-mobile
         run: |
