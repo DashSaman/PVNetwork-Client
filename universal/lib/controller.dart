@@ -6,6 +6,7 @@ import 'core/engine/vpn_core_adapter.dart';
 import 'core/engine/xray_adapter.dart';
 import 'core/import/profile_detector.dart';
 import 'core/model/pv_profile.dart';
+import 'core/security/safe_error.dart';
 import 'core/storage/profile_repository.dart';
 
 enum PVLinkState { disconnected, connecting, connected, disconnecting, error }
@@ -187,7 +188,7 @@ class PVController extends ChangeNotifier {
     }
     final chosen = adapterFor(profile);
     if (chosen == null) {
-      lastError = 'No enabled engine for "${profile.engineRequirements['engine'] ?? profile.protocol}".';
+      lastError = sanitizeVpnText('No enabled engine for "${profile.engineRequirements['engine'] ?? profile.protocol}".');
       linkState = PVLinkState.error;
       _notify();
       return Future<void>.value();
@@ -232,7 +233,7 @@ class PVController extends ChangeNotifier {
         });
       } catch (e) {
         if (!_current(generation)) return;
-        lastError = e.toString();
+        lastError = safeVpnError(e);
         linkState = PVLinkState.error;
         _notify();
         await _adapterSubscription?.cancel();
@@ -265,7 +266,7 @@ class PVController extends ChangeNotifier {
       try {
         if (session != null) await session.stop();
       } catch (e) {
-        stopError = 'Unable to stop VPN core: $e';
+        stopError = safeVpnError(e);
       } finally {
         if (_current(generation)) {
           await _adapterSubscription?.cancel();
