@@ -83,3 +83,7 @@ Stage 4: desktop and Apple native VPN services, TV UX and platform-specific life
 Stage 5: account/store/customer integrations and signed commercial release only after security/store approval.
 
 Every checkbox requires link to source change, automatic tests, a genuine device or OS interoperability receipt when applicable, and an updated capability matrix. No UI-only checkmarks.
+
+## Catalog supersession / detail index (2026-10-27)
+
+This file remains the shorter milestone and acceptance overview. The canonical EXHAUSTIVE 503-item / 25-domain feature inventory is `docs/product/PVNETWORK_UNIVERSAL_FEATURE_MASTER_2026-10-27.md`. Keep the expanded list synchronized from that source; neither file constitutes a claim that all features work or are universally feasible on all operating systems.
