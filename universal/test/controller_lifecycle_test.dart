@@ -222,6 +222,29 @@ void main() {
     await other.dispose();
   });
 
+  test('deleting an active profile is blocked if native stop fails',
+      () async {
+    final core = StubCore('xray-core');
+    final controller = PVController(MemoryRepository(), primaryAdapter: core);
+    controller.profiles.add(fakeProfile('primary', 'xray'));
+    controller.selectedId = 'primary';
+
+    await controller.connect();
+    core.failStop = true;
+    await controller.remove('primary');
+    expect(controller.profiles.map((p) => p.id), contains('primary'));
+    expect(controller.selectedId, 'primary');
+    expect(controller.activeAdapter, same(core));
+
+    core.failStop = false;
+    await controller.remove('primary');
+    expect(controller.profiles, isEmpty);
+    expect(controller.selectedId, isNull);
+    expect(controller.linkState, PVLinkState.disconnected);
+    controller.dispose();
+    await core.dispose();
+  });
+
   test('late traffic sample does not survive disconnect', () async {
     final core = StubCore('xray-core')
       ..statsResult = Completer<VpnCoreStatistics>();
