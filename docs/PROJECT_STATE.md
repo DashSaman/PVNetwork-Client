@@ -57,3 +57,15 @@ Do not publish another user-facing release merely because the UI builds. The nex
 ## Product feature baseline — 2026-10-27
 
 Feature inventory expanded to 503 individually trackable requested capabilities across 25 areas. See `docs/product/PVNETWORK_UNIVERSAL_FEATURE_MASTER_2026-10-27.md`. This is backlog only; no functionality is newly built or device-verified by the catalog update. All capability checkbox gates remain open unless separate evidence establishes success. Prioritize CI/safety and one actual device tunnel before broad feature parity.
+
+
+## 2026-10-27 Stage 0 code branch / PR #1 (NOT MERGED)
+
+- Branch: `feat/stage0-reliability-20261027`; PR: https://github.com/DashSaman/PVNetwork-Client/pull/1 .
+- Replaced AGP9-broken `file_picker 11.0.2` with official `file_selector 1.1.0` and SAF-compatible read for .ovpn/.conf/.json/.yaml/.yml/.txt.
+- Android workflow now compiles Xray AAR from its exact checked-out commit, verifies SHA256 and bound Java class, and is PR-triggered. No "latest unrelated AAR" success or allow-missing-native-core path is accepted for Android CI.
+- Android VpnService own-UID exclusion added to reduce tunnel recursive socket risk. No native socket-protection device proof.
+- Removed unauthenticated localhost HTTP health proxy inbound and its routing rule. Core MeasureDelay reports -1 until a secure alternative exists.
+- New imports put raw config and subscription URL in SecretStore references; explicit deletion, legacy prefix and resolved-config validation corrected; regression tests committed.
+- GitHub PR CI is RUNNING as of the in-chat review; first observed Linux result success. No Android APK pass or on-device VPN validation claimed yet.
+- Safe follow-on: real device handshake/packet traces, native fd resource ownership, controller cancellation, legacy profile migration, Android signing/Store rules and secure latency probes.
