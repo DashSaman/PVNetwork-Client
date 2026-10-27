@@ -76,7 +76,8 @@ class PVController extends ChangeNotifier {
   }
 
   Future<void> addRaw(String value, {String source = 'text'}) async {
-    final profile = detector.detect(value, sourceType: source).toProfile();
+    final imported = detector.detect(value, sourceType: source).toProfile();
+    final profile = await repository.secureImportedProfile(imported);
     profiles.insert(0, profile);
     selectedId ??= profile.id;
     await persist();
