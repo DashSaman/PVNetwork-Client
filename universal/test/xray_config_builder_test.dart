@@ -20,6 +20,14 @@ Map<String, dynamic> parse(PVProfile p) => jsonDecode(const XrayConfigBuilder().
 void main() {
   const builder = XrayConfigBuilder();
 
+  test('never exposes an unauthenticated localhost HTTP proxy', () {
+    final cfg = parse(profile('trojan://pw@t.example.com:443'));
+    final inbounds = (cfg['inbounds'] as List).cast<Map>();
+    expect(inbounds.where((inbound) => inbound['protocol'] == 'http'), isEmpty);
+    final rules = (cfg['routing']['rules'] as List).cast<Map>();
+    expect(rules.any((rule) => (rule['inboundTag'] as List?)?.contains('health-in') == true), isFalse);
+  });
+
   test('VLESS REALITY outbound + stream settings', () {
     final cfg = parse(profile(
       'vless://uuid@h.example.com:443?security=reality&sni=www.example.com&pbk=PUBKEY&sid=ab&fp=chrome&type=grpc&serviceName=gun',
