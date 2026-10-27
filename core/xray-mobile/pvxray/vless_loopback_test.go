@@ -199,4 +199,15 @@ func TestDartGeneratedVlessHasRealLocalHandshakeAndDataPath(t *testing.T) {
         t.Fatalf("invalid VLESS response: status=%d body=%q target hits=%d",
             response.StatusCode, string(payload), handled.Load())
     }
+    // Test the new in-process probe path. It must force the active 'proxy'
+    // outbound, without creating an unauthenticated loopback listener.
+    beforeProbe := handled.Load()
+    delay := measureDelayThroughInstance(client, checkURL, http.StatusOK)
+    if delay < 0 {
+        t.Fatal("internal proxy-bound HTTP latency probe failed")
+    }
+    if handled.Load() <= beforeProbe {
+        t.Fatalf("internal latency probe did not traverse real VLESS; hits=%d", handled.Load())
+    }
+
 }
