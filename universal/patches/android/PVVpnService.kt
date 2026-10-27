@@ -30,7 +30,8 @@ class PVVpnService : VpnService() {
                 return START_NOT_STICKY
             }
             else -> {
-                val config = intent?.getStringExtra(EXTRA_CONFIG) ?: ""
+                val config = intent?.getStringExtra(EXTRA_CONFIG)
+                    ?: return START_NOT_STICKY
                 return try {
                     startTunnel(config)
                     START_STICKY
@@ -44,7 +45,11 @@ class PVVpnService : VpnService() {
     }
 
     private fun startTunnel(config: String) {
-        if (PvxrayBridge.isRunning()) return
+        if (config.isBlank()) throw IllegalArgumentException("Empty VPN configuration")
+        if (PvxrayBridge.isRunning()) {
+            PvxrayPlugin.reportStartSuccess()
+            return
+        }
         val fdBuilder = Builder()
             .setSession("PVNetwork")
             .setMtu(1500)
@@ -53,6 +58,10 @@ class PVVpnService : VpnService() {
             .addRoute("0.0.0.0", 0)
             .addRoute("::", 0)
             .setBlocking(false)
+            // The Go/Xray engine shares our UID. Exclude only our own app so
+            // its outbound sockets cannot loop into our full-device tunnel.
+            // A dedicated per-socket protect() path is still a future gate.
+            .addDisallowedApplication(packageName)
         val descriptor = fdBuilder.establish()
             ?: throw IllegalStateException("establish() returned null (permission revoked?)")
         tun = descriptor
