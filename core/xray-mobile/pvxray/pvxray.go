@@ -2,6 +2,8 @@ package pvxray
 
 import (
         "errors"
+        "context"
+        "net"
         "net/http"
         "net/url"
         "os"
@@ -11,6 +13,8 @@ import (
         "time"
 
         "github.com/xtls/xray-core/core"
+        xnet "github.com/xtls/xray-core/common/net"
+        "github.com/xtls/xray-core/common/session"
         "github.com/xtls/xray-core/features/stats"
 
         _ "github.com/xtls/xray-core/app/dispatcher"
@@ -183,12 +187,60 @@ func ResetStats() {
         }
 }
 
-// MeasureDelay is intentionally unavailable until a secure authenticated
-// probe path is available. The previous localhost HTTP proxy accepted any
-// local application and could bypass per-app routing. Never reopen that port
-// merely to display latency. Return -1 so the UI displays an unknown value.
-func MeasureDelay(_ string) int64 {
-        return -1
+// MeasureDelay makes a bounded HTTPS probe through the *active* Xray outbound
+// without exposing an HTTP/SOCKS listening socket to other local applications.
+// Only the fixed public probe endpoint is allowed through this gomobile API:
+// otherwise the app MethodChannel could be abused for SSRF / LAN scanning.
+func MeasureDelay(probeURL string) int64 {
+        if probeURL != "https://www.gstatic.com/generate_204" {
+                return -1
+        }
+        mu.Lock()
+        active := instance
+        if active == nil || !active.IsRunning() {
+                mu.Unlock()
+                return -1
+        }
+        mu.Unlock()
+
+        return measureDelayThroughInstance(active, probeURL, http.StatusNoContent)
+}
+
+// The private helper is also exercised using a disposable VLESS localhost
+// test endpoint. This helper is NOT accessible via gomobile/MethodChannel.
+func measureDelayThroughInstance(active *core.Instance, endpoint string, expectedStatus int) int64 {
+        ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+        defer cancel()
+        transport := &http.Transport{
+                Proxy:                 nil,
+                DisableKeepAlives:     true,
+                TLSHandshakeTimeout:   5 * time.Second,
+                ResponseHeaderTimeout: 5 * time.Second,
+                DialContext: func(dialCtx context.Context, network, addr string) (net.Conn, error) {
+                        dest, err := xnet.ParseDestination(network + ":" + addr)
+                        if err != nil { return nil, err }
+                        forced := session.SetForcedOutboundTagToContext(dialCtx, "proxy")
+                        return core.Dial(forced, active, dest)
+                },
+        }
+        defer transport.CloseIdleConnections()
+        client := &http.Client{
+                Transport: transport,
+                Timeout:   8 * time.Second,
+                CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+                        return http.ErrUseLastResponse
+                },
+        }
+        req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+        if err != nil { return -1 }
+        start := time.Now()
+        response, err := client.Do(req)
+        if err != nil { return -1 }
+        defer response.Body.Close()
+        if response.StatusCode != expectedStatus { return -1 }
+        // Probe endpoints have no body (204); refuse to consume arbitrary data.
+        if response.ContentLength > 512 { return -1 }
+        return time.Since(start).Milliseconds()
 }
 
 // MeasureDirectDelay probes url without any proxy (control measurement for
