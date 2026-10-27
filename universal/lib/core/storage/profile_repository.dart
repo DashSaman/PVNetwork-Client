@@ -22,11 +22,30 @@ class ProfileRepository {
   Future<List<PVProfile>> loadProfiles() async {
     final raw = await _storage.read(key: _profilesKey);
     if (raw == null || raw.isEmpty) return <PVProfile>[];
+    late final List<PVProfile> decoded;
     try {
-      return PVProfile.decodeList(raw);
+      decoded = PVProfile.decodeList(raw);
     } catch (_) {
+      // Never overwrite a corrupted original during recovery.
       return <PVProfile>[];
     }
+    final migrated = await protectLegacyProfiles(decoded);
+    if (migrated.any((profile) =>
+        !identical(profile, decoded.firstWhere((p) => p.id == profile.id)))) {
+      // Persist only after EVERY sensitive field was moved to SecretStore.
+      await saveProfiles(migrated);
+    }
+    return migrated;
+  }
+
+  /// Idempotent data migration for v0.3 records that previously serialized
+  /// raw credentials. Runs before the list is used by UI or future exports.
+  Future<List<PVProfile>> protectLegacyProfiles(List<PVProfile> profiles) async {
+    final migrated = <PVProfile>[];
+    for (final profile in profiles) {
+      migrated.add(await secureImportedProfile(profile));
+    }
+    return migrated;
   }
 
   Future<void> saveProfiles(List<PVProfile> profiles) =>
@@ -65,16 +84,27 @@ class ProfileRepository {
   /// bearer tokens. These must not be included in JSON backups/logs.
   Future<PVProfile> secureImportedProfile(PVProfile profile) async {
     final refs = Map<String, String>.of(profile.secretRefs);
-    final rawRef = await writeProfileSecret(profile, 'rawSource', profile.rawSource);
-    refs['rawSource'] = rawRef;
-    String? subscription = profile.subscriptionUrl;
-    if (subscription != null && subscription.isNotEmpty) {
-      final subRef = await writeProfileSecret(profile, 'subscriptionUrl', subscription);
-      refs['subscriptionUrl'] = subRef;
-      subscription = r'$ref{subscriptionUrl}';
+    var raw = profile.rawSource;
+    var subscription = profile.subscriptionUrl;
+    var changed = false;
+    if (raw.isNotEmpty &&
+        !(raw == r'$ref{rawSource}' && refs.containsKey('rawSource'))) {
+      refs['rawSource'] = await writeProfileSecret(profile, 'rawSource', raw);
+      raw = r'$ref{rawSource}';
+      changed = true;
     }
+    if (subscription != null &&
+        subscription.isNotEmpty &&
+        !(subscription == r'$ref{subscriptionUrl}' &&
+            refs.containsKey('subscriptionUrl'))) {
+      refs['subscriptionUrl'] =
+          await writeProfileSecret(profile, 'subscriptionUrl', subscription);
+      subscription = r'$ref{subscriptionUrl}';
+      changed = true;
+    }
+    if (!changed) return profile;
     return profile.copyWith(
-      rawSource: r'$ref{rawSource}',
+      rawSource: raw,
       subscriptionUrl: subscription,
       secretRefs: refs,
     );
