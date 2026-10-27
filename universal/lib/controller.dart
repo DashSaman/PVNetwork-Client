@@ -80,7 +80,7 @@ class PVController extends ChangeNotifier {
   Future<void> _serialize(Future<void> Function() task) {
     final result = _operationTail.then((_) => task());
     // A failed operation must not poison the queue of future operations.
-    _operationTail = result.then<void>((_) {}, onError: (Object _, StackTrace __) {});
+    _operationTail = result.then<void>((_) {}, onError: (Object _, StackTrace _) {});
     return result;
   }
 
