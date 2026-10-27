@@ -34,10 +34,16 @@ abstract interface class XrayMobileBinding {
 }
 
 class MethodChannelXrayBinding implements XrayMobileBinding {
-  const MethodChannelXrayBinding({this.channel = _channel});
+  const MethodChannelXrayBinding({
+    this.channel = _channel,
+    this.startTimeout = nativeStartTimeout,
+    this.stopTimeout = nativeStopTimeout,
+  });
 
   static const _channel = MethodChannel('dev.pvnetwork.xray');
   final MethodChannel channel;
+  final Duration startTimeout;
+  final Duration stopTimeout;
 
   @override
   String get bindingId => 'method-channel';
@@ -75,7 +81,7 @@ class MethodChannelXrayBinding implements XrayMobileBinding {
   Future<void> _invokeStart(String config, int tunFd) async {
     await _channel
         .invokeMethod<void>('start', {'config': config, 'tunFd': tunFd})
-        .timeout(nativeStartTimeout);
+        .timeout(startTimeout);
   }
 
   @override
@@ -102,7 +108,7 @@ class MethodChannelXrayBinding implements XrayMobileBinding {
 
   @override
   Future<void> stop() =>
-      _channel.invokeMethod<void>('stop').timeout(nativeStopTimeout);
+      _channel.invokeMethod<void>('stop').timeout(stopTimeout);
 
   @override
   Future<bool> isRunning() async => (await _channel.invokeMethod<bool>('isRunning')) ?? false;
