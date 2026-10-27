@@ -4,6 +4,14 @@ on:
   push:
     branches: [main]
     paths:
+      - 'core/xray-mobile/**'
+      - 'universal/**'
+      - 'scripts/**'
+      - '.github/workflows/universal-release.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'core/xray-mobile/**'
       - 'universal/**'
       - 'scripts/**'
       - '.github/workflows/universal-release.yml'
@@ -27,26 +35,43 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.0'
+          cache: false
       - uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.47.4'
           channel: stable
           cache: true
-      - name: Resolve latest core AAR run
-        id: aar_run
-        env:
-          GH_TOKEN: ${{ github.token }}
+      # Build the native core from THIS checkout, never the "latest green"
+      # artifact belonging to a possibly different commit or dependency.
+      - name: Install Android native toolchain
         run: |
-          RID=$(gh run list -R "$GITHUB_REPOSITORY" --workflow xray-mobile-ci.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')
-          echo "run_id=$RID" >> "$GITHUB_OUTPUT"
-      - name: Fetch pvxray AAR
-        if: steps.aar_run.outputs.run_id != ''
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        with:
-          name: pvnetwork-xray-android-aar
-          path: core/xray-mobile/dist
-          run-id: ${{ steps.aar_run.outputs.run_id }}
-          github-token: ${{ github.token }}
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0' 'ndk;29.0.14206865'
+      - name: Build and test checkout-matched pvxray AAR
+        working-directory: core/xray-mobile
+        run: |
+          go get -tool golang.org/x/mobile/cmd/gobind@v0.0.0-20260709172247-6129f5bee9d5
+          go mod tidy
+          go test ./...
+          go install golang.org/x/mobile/cmd/gomobile@v0.0.0-20260709172247-6129f5bee9d5
+          go install golang.org/x/mobile/cmd/gobind@v0.0.0-20260709172247-6129f5bee9d5
+          export PATH="$(go env GOPATH)/bin:$PATH"
+          export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/29.0.14206865"
+          gomobile init
+          mkdir -p dist
+          gomobile bind -v -target=android -androidapi 24 -trimpath -ldflags='-s -w -buildid= -checklinkname=0' -o dist/pvxray.aar ./pvxray
+          sha256sum dist/pvxray.aar > dist/SHA256SUMS.txt
+      - name: Verify mandatory AAR and binding class
+        run: |
+          test -s core/xray-mobile/dist/pvxray.aar
+          (cd core/xray-mobile && sha256sum -c dist/SHA256SUMS.txt)
+          unzip -p core/xray-mobile/dist/pvxray.aar classes.jar > /tmp/pvxray-classes.jar
+          jar tf /tmp/pvxray-classes.jar | grep -E '/Pvxray.class$'
+          echo "Core source commit: $GITHUB_SHA"
+          cat core/xray-mobile/dist/SHA256SUMS.txt
       - name: Generate Android host
         run: |
           mkdir -p buildhost
