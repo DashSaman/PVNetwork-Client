@@ -23,7 +23,7 @@ permissions:
 
 concurrency:
   group: pvnetwork-universal-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   xray_config_contract:
