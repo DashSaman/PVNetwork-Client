@@ -148,8 +148,14 @@ class PVController extends ChangeNotifier {
   }
 
   Future<void> remove(String id) async {
-    if (selectedId == id && linkState != PVLinkState.disconnected) {
+    if (selectedId == id &&
+        (_activeAdapter != null || linkState != PVLinkState.disconnected)) {
       await disconnect();
+      if (_activeAdapter != null || linkState != PVLinkState.disconnected) {
+        // Keep the profile and its secrets while a failing native session
+        // might still rely on them. The user can retry disconnect first.
+        return;
+      }
     }
     final target = profiles.where((p) => p.id == id).firstOrNull;
     profiles.removeWhere((p) => p.id == id);
