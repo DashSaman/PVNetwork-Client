@@ -51,6 +51,30 @@ void main() {
     expect(await secrets.read('imported-1.subscriptionUrl'), isNull);
   });
 
+  test('legacy profile migration is idempotent and preserves user data', () async {
+    final secrets = InMemorySecretStore();
+    final repo = ProfileRepository(secretStore: secrets);
+    final legacy = PVProfile(
+      id: 'old',
+      name: 'Legacy server',
+      protocol: 'VLESS',
+      sourceType: 'clipboard',
+      rawSource: 'vless://sensitive-uuid@vpn.example.com:443',
+      createdAt: DateTime.utc(2026, 9, 1),
+      subscriptionUrl: 'https://sub.example.com/access-token',
+    );
+    final once = await repo.protectLegacyProfiles([legacy]);
+    expect(PVProfile.encodeList(once), isNot(contains('sensitive-uuid')));
+    expect(PVProfile.encodeList(once), isNot(contains('access-token')));
+    expect(once.first.name, legacy.name);
+    expect(once.first.id, legacy.id);
+    final twice = await repo.protectLegacyProfiles(once);
+    expect(identical(twice.first, once.first), isTrue);
+    final resolved = await repo.resolveSecrets(twice.first);
+    expect(resolved.rawSource, legacy.rawSource);
+    expect(resolved.subscriptionUrl, legacy.subscriptionUrl);
+  });
+
   test('resolves field placeholders without overwriting stored source', () async {
     final secrets = InMemorySecretStore();
     final repo = ProfileRepository(secretStore: secrets);
