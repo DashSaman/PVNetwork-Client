@@ -95,8 +95,9 @@ open(path, 'w').write(text)
 PY
   fi
 else
-  echo "[pv] No pvxray.aar found (run core/xray-mobile CI or gomobile bind locally);"
-  echo "     the app will build and run, and report the engine as unavailable until the AAR ships."
+  echo "[pv] ERROR: mandatory pvxray.aar is missing for Android." >&2
+  echo "     Build the native core from this checkout before generating the host." >&2
+  exit 1
 fi
 
 echo "[pv] flutter pub get"
