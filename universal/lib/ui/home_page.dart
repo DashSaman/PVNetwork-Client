@@ -73,17 +73,18 @@ class HomePage extends StatelessWidget {
                   child: FilledButton.icon(
                     onPressed: profile == null
                         ? openConnections
-                        : controller.isBusy
+                        : state == PVLinkState.disconnecting
                             ? null
                             : () => _toggle(context),
                     icon: Icon(switch (state) {
                       PVLinkState.connected => Icons.power_settings_new,
-                      PVLinkState.connecting || PVLinkState.disconnecting => Icons.hourglass_top,
+                      PVLinkState.connecting => Icons.close,
+                      PVLinkState.disconnecting => Icons.hourglass_top,
                       _ => Icons.hub,
                     }),
                     label: Text(switch (state) {
                       PVLinkState.connected => 'Disconnect',
-                      PVLinkState.connecting => 'Connecting…',
+                      PVLinkState.connecting => 'Cancel connection',
                       PVLinkState.disconnecting => 'Disconnecting…',
                       PVLinkState.error => 'Retry',
                       _ => profile == null ? 'Select connection' : 'Connect',
@@ -133,7 +134,8 @@ class HomePage extends StatelessWidget {
   void _toggle(BuildContext context) {
     final profile = controller.selected;
     if (profile == null) return;
-    if (controller.linkState == PVLinkState.connected) {
+    if (controller.linkState == PVLinkState.connected ||
+        controller.linkState == PVLinkState.connecting) {
       controller.disconnect();
       return;
     }
