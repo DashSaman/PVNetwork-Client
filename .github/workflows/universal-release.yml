@@ -122,6 +122,12 @@ jobs:
           (cd ../core/xray-mobile && PV_REQUIRE_XRAY_FIXTURES=1 go test ./pvxray -run 'Test(PVNetworkGeneratedConfigsAgainstPinnedCore|DartGeneratedVlessHasRealLocalHandshakeAndDataPath)' -v)
           flutter build apk --release
           unzip -l build/app/outputs/flutter-apk/app-release.apk | grep -E 'lib/arm64-v8a/libgojni[.]so'
+      - name: Build test-only native Android instrumentation artifacts
+        working-directory: buildhost/android
+        run: |
+          ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon
+          test -s app/build/outputs/apk/debug/app-debug.apk
+          test -s app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
       - name: Package
         run: |
           mkdir -p dist
@@ -130,6 +136,13 @@ jobs:
         with:
           name: pvnetwork-android-dev
           path: dist/PVNetwork-Android-dev.apk
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pvnetwork-android-native-test
+          path: |
+            buildhost/android/app/build/outputs/apk/debug/app-debug.apk
+            buildhost/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
           if-no-files-found: error
 
   android_emulator_smoke:
@@ -142,6 +155,10 @@ jobs:
         with:
           name: pvnetwork-android-dev
           path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: pvnetwork-android-native-test
+          path: dist/androidTest
       - name: Enable KVM for emulator runner
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -154,7 +171,9 @@ jobs:
           target: google_apis
           arch: x86_64
           emulator-boot-timeout: 600
-          script: bash scripts/android_emulator_smoke.sh dist/PVNetwork-Android-dev.apk
+          script: |
+            bash scripts/android_emulator_smoke.sh dist/PVNetwork-Android-dev.apk
+            bash scripts/android_emulator_vpn_tun_test.sh dist/androidTest/debug/app-debug.apk dist/androidTest/debug/app-debug-androidTest.apk
 
   windows:
     name: Windows x64
