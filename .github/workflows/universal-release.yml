@@ -173,7 +173,7 @@ jobs:
           emulator-boot-timeout: 600
           script: |
             bash scripts/android_emulator_smoke.sh dist/PVNetwork-Android-dev.apk
-            bash scripts/android_emulator_vpn_tun_test.sh dist/androidTest/debug/app-debug.apk dist/androidTest/debug/app-debug-androidTest.apk
+            bash scripts/android_emulator_vpn_tun_test.sh dist/androidTest/debug/app-debug.apk dist/androidTest/androidTest/debug/app-debug-androidTest.apk
 
   windows:
     name: Windows x64
