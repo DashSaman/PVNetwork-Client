@@ -34,6 +34,32 @@ if [[ -d "$PATCHES" ]]; then
   echo "[pv] Applying Android patches"
   mkdir -p "$KT_DIR"
   cp "$PATCHES/MainActivity.kt" "$PATCHES/PvxrayBridge.kt" "$PATCHES/PvxrayPlugin.kt" "$PATCHES/PVVpnService.kt" "$KT_DIR/"
+  # The test class belongs ONLY in Android's androidTest source set; release
+  # APKs never contain or expose an instrumentation entry point.
+  ANDROID_TEST_DIR="$TARGET_DIR/android/app/src/androidTest/kotlin/com/pvnetwork/vpn"
+  mkdir -p "$ANDROID_TEST_DIR"
+  cp "$PATCHES/PVVpnLifecycleTest.kt" "$ANDROID_TEST_DIR/"
+  GRADLE_TEST_FILE="$TARGET_DIR/android/app/build.gradle.kts"
+  python3 - "$GRADLE_TEST_FILE" <<'PY'
+import sys
+p=sys.argv[1]
+s=open(p).read()
+line='testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"'
+if line not in s:
+    anchor="defaultConfig {"
+    assert anchor in s, "generated Android Gradle defaultConfig missing"
+    s=s.replace(anchor,anchor+"\n        "+line,1)
+deps='''
+
+dependencies {
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+}
+'''
+if 'androidx.test.ext:junit:' not in s:
+    s += deps
+open(p,'w').write(s)
+PY
 
   MANIFEST="$TARGET_DIR/android/app/src/main/AndroidManifest.xml"
   if [[ -f "$MANIFEST" ]] && ! grep -q "PVVpnService" "$MANIFEST"; then
