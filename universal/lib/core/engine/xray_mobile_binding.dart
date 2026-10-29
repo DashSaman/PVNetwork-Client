@@ -34,10 +34,16 @@ abstract interface class XrayMobileBinding {
 }
 
 class MethodChannelXrayBinding implements XrayMobileBinding {
-  const MethodChannelXrayBinding({this.channel = _channel});
+  const MethodChannelXrayBinding({
+    this.channel = _channel,
+    this.startTimeout = nativeStartTimeout,
+    this.stopTimeout = nativeStopTimeout,
+  });
 
   static const _channel = MethodChannel('dev.pvnetwork.xray');
   final MethodChannel channel;
+  final Duration startTimeout;
+  final Duration stopTimeout;
 
   @override
   String get bindingId => 'method-channel';
@@ -55,28 +61,42 @@ class MethodChannelXrayBinding implements XrayMobileBinding {
   }
 
   @override
-  Future<String> version() async => (await _channel.invokeMethod<String>('version')) ?? '';
+  Future<String> version() async => (await channel.invokeMethod<String>('version')) ?? '';
 
   @override
   Future<bool> validateConfig(String config) async {
     try {
-      return (await _channel.invokeMethod<bool>('validate', {'config': config})) ?? false;
+      return (await channel.invokeMethod<bool>('validate', {'config': config})) ?? false;
     } on PlatformException {
       return false;
     }
   }
 
+  /// Timeout bounds Flutter's wait for the native service. It does not
+  /// forcibly terminate native Go calls; the Android worker must clean up
+  /// once those calls return. Never interpret a timeout as DISCONNECTED.
+  static const nativeStartTimeout = Duration(seconds: 25);
+  static const nativeStopTimeout = Duration(seconds: 12);
+
+  Future<void> _invokeStart(String config, int tunFd) async {
+    await channel
+        .invokeMethod<void>('start', {'config': config, 'tunFd': tunFd})
+        .timeout(startTimeout);
+  }
+
   @override
   Future<void> start(String config, {int tunFd = -1}) async {
     try {
-      await _channel.invokeMethod<void>('start', {'config': config, 'tunFd': tunFd});
+      await _invokeStart(config, tunFd);
     } on PlatformException catch (e) {
       if (e.code == 'vpn-permission') {
+        // Permission UI can remain open until the user decides. Only the
+        // native startup after permission is bounded.
         final granted = await prepare();
         if (!granted) {
           throw StateError('VPN permission was denied; the tunnel cannot start.');
         }
-        await _channel.invokeMethod<void>('start', {'config': config, 'tunFd': tunFd});
+        await _invokeStart(config, tunFd);
         return;
       }
       rethrow;
@@ -84,29 +104,30 @@ class MethodChannelXrayBinding implements XrayMobileBinding {
   }
 
   @override
-  Future<bool> prepare() async => (await _channel.invokeMethod<bool>('prepare')) ?? false;
+  Future<bool> prepare() async => (await channel.invokeMethod<bool>('prepare')) ?? false;
 
   @override
-  Future<void> stop() => _channel.invokeMethod<void>('stop');
+  Future<void> stop() =>
+      channel.invokeMethod<void>('stop').timeout(stopTimeout);
 
   @override
-  Future<bool> isRunning() async => (await _channel.invokeMethod<bool>('isRunning')) ?? false;
+  Future<bool> isRunning() async => (await channel.invokeMethod<bool>('isRunning')) ?? false;
 
   @override
-  Future<int> queryUplink() async => (await _channel.invokeMethod<int>('queryUplink')) ?? 0;
+  Future<int> queryUplink() async => (await channel.invokeMethod<int>('queryUplink')) ?? 0;
 
   @override
-  Future<int> queryDownlink() async => (await _channel.invokeMethod<int>('queryDownlink')) ?? 0;
+  Future<int> queryDownlink() async => (await channel.invokeMethod<int>('queryDownlink')) ?? 0;
 
   @override
-  Future<void> resetStats() => _channel.invokeMethod<void>('resetStats');
+  Future<void> resetStats() => channel.invokeMethod<void>('resetStats');
 
   @override
-  Future<int> measureDelay(String url) async => (await _channel.invokeMethod<int>('measureDelay', {'url': url})) ?? -1;
+  Future<int> measureDelay(String url) async => (await channel.invokeMethod<int>('measureDelay', {'url': url})) ?? -1;
 
   @override
   Future<void> initEnvironment(String assetLocation, String configLocation) =>
-      _channel.invokeMethod<void>('initEnvironment', {'assets': assetLocation, 'config': configLocation});
+      channel.invokeMethod<void>('initEnvironment', {'assets': assetLocation, 'config': configLocation});
 }
 
 /// Fallback for platforms without the native pvxray handler: every call

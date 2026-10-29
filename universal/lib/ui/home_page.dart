@@ -73,17 +73,18 @@ class HomePage extends StatelessWidget {
                   child: FilledButton.icon(
                     onPressed: profile == null
                         ? openConnections
-                        : controller.isBusy
+                        : state == PVLinkState.disconnecting
                             ? null
                             : () => _toggle(context),
                     icon: Icon(switch (state) {
                       PVLinkState.connected => Icons.power_settings_new,
-                      PVLinkState.connecting || PVLinkState.disconnecting => Icons.hourglass_top,
+                      PVLinkState.connecting => Icons.close,
+                      PVLinkState.disconnecting => Icons.hourglass_top,
                       _ => Icons.hub,
                     }),
                     label: Text(switch (state) {
                       PVLinkState.connected => 'Disconnect',
-                      PVLinkState.connecting => 'Connecting…',
+                      PVLinkState.connecting => 'Cancel connection',
                       PVLinkState.disconnecting => 'Disconnecting…',
                       PVLinkState.error => 'Retry',
                       _ => profile == null ? 'Select connection' : 'Connect',
@@ -103,6 +104,14 @@ class HomePage extends StatelessWidget {
                 _line(Icons.dns_outlined, 'Server', profile?.endpoint ?? '—'),
                 _line(Icons.security_outlined, 'Protocol', profile?.protocol ?? '—'),
                 _line(Icons.speed, 'Latency', stats?.latencyMs != null && stats!.latencyMs! > 0 ? '${stats.latencyMs} ms' : '—'),
+                _line(
+                  Icons.verified_outlined,
+                  'Proxy data path',
+                  state == PVLinkState.connected && stats?.latencyMs != null &&
+                          stats!.latencyMs! >= 0
+                      ? 'HTTPS probe verified'
+                      : 'Not verified',
+                ),
                 _line(Icons.swap_vert, 'Traffic', stats == null ? '—' : '↑ ${humanBytes(stats.uploadBytes)}  ↓ ${humanBytes(stats.downloadBytes)}'),
                 _line(Icons.public, 'Engine', adapter?.id ?? '—'),
               ]),
@@ -133,7 +142,8 @@ class HomePage extends StatelessWidget {
   void _toggle(BuildContext context) {
     final profile = controller.selected;
     if (profile == null) return;
-    if (controller.linkState == PVLinkState.connected) {
+    if (controller.linkState == PVLinkState.connected ||
+        controller.linkState == PVLinkState.connecting) {
       controller.disconnect();
       return;
     }

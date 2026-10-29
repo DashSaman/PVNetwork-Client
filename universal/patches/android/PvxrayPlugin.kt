@@ -3,6 +3,9 @@ package com.pvnetwork.vpn
 import android.app.Activity
 import android.content.Intent
 import android.net.VpnService
+import android.os.Handler
+import android.os.Looper
+import java.util.concurrent.Executors
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -25,6 +28,31 @@ object PvxrayPlugin : MethodChannel.MethodCallHandler {
 
     private var pendingPrepare: MethodChannel.Result? = null
     private var pendingStart: MethodChannel.Result? = null
+    private var pendingStop: MethodChannel.Result? = null
+    private val main = Handler(Looper.getMainLooper())
+    private val queryWorker = Executors.newSingleThreadExecutor { task ->
+        Thread(task, "pvnetwork-vpn-query").apply { isDaemon = true }
+    }
+
+    // A blocked Go mutex must never block Flutter's Android main thread.
+    // Result completions are always marshalled back to that thread.
+    private fun runNative(result: MethodChannel.Result, task: () -> Any?) {
+        queryWorker.execute {
+            try {
+                val value = task()
+                main.post { result.success(value) }
+            } catch (_: Throwable) {
+                main.post {
+                    result.error(
+                        "core-error",
+                        "Native VPN operation failed; inspect redacted diagnostics.",
+                        null
+                    )
+                }
+            }
+        }
+    }
+
 
     fun register(messenger: BinaryMessenger, context: android.content.Context) {
         appContext = context.applicationContext
@@ -50,6 +78,21 @@ object PvxrayPlugin : MethodChannel.MethodCallHandler {
         pendingStart = null
     }
 
+    /** Must be called on the Android main thread after native Stop returns. */
+    fun reportStopCompleted(clean: Boolean) {
+        val pending = pendingStop
+        pendingStop = null
+        if (clean) {
+            pending?.success(true)
+        } else {
+            pending?.error(
+                "stop-failed",
+                "The VPN core could not be cleanly stopped.",
+                null
+            )
+        }
+    }
+
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         if (!PvxrayBridge.available && call.method != "prepare" && call.method != "isVpnPrepared" && call.method != "stop") {
             result.error("engine-unavailable", "pvxray core is not bundled in this build", null)
@@ -57,10 +100,10 @@ object PvxrayPlugin : MethodChannel.MethodCallHandler {
         }
         try {
             when (call.method) {
-                "version" -> result.success(PvxrayBridge.version())
-                "validate" -> {
+                "version" -> runNative(result) { PvxrayBridge.version() }
+                "validate" -> runNative(result) {
                     PvxrayBridge.validate(call.argument<String>("config") ?: "")
-                    result.success(true)
+                    true
                 }
                 "start" -> {
                     if (VpnService.prepare(appContext) != null) {
@@ -80,24 +123,32 @@ object PvxrayPlugin : MethodChannel.MethodCallHandler {
                     appContext!!.startForegroundService(intent)
                 }
                 "stop" -> {
-                    val intent = Intent(appContext, PVVpnService::class.java).setAction(PVVpnService.ACTION_STOP)
+                    if (pendingStop != null) {
+                        result.error("busy", "Another VPN stop is already in progress.", null)
+                        return
+                    }
+                    // A stop must only resolve after the worker has closed
+                    // Xray and its TUN, not when startService merely returns.
+                    pendingStop = result
+                    reportStartFailure("VPN connection was cancelled.")
+                    val intent = Intent(appContext, PVVpnService::class.java)
+                        .setAction(PVVpnService.ACTION_STOP)
                     appContext!!.startService(intent)
-                    result.success(true)
                 }
-                "isRunning" -> result.success(PvxrayBridge.isRunning())
-                "queryUplink" -> result.success(PvxrayBridge.queryUplink())
-                "queryDownlink" -> result.success(PvxrayBridge.queryDownlink())
-                "resetStats" -> {
+                "isRunning" -> runNative(result) { PvxrayBridge.isRunning() }
+                "queryUplink" -> runNative(result) { PvxrayBridge.queryUplink() }
+                "queryDownlink" -> runNative(result) { PvxrayBridge.queryDownlink() }
+                "resetStats" -> runNative(result) {
                     PvxrayBridge.resetStats()
-                    result.success(true)
+                    true
                 }
-                "measureDelay" -> result.success(PvxrayBridge.measureDelay(call.argument<String>("url") ?: ""))
-                "initEnvironment" -> {
+                "measureDelay" -> runNative(result) { PvxrayBridge.measureDelay(call.argument<String>("url") ?: "") }
+                "initEnvironment" -> runNative(result) {
                     PvxrayBridge.initEnvironment(
                         call.argument<String>("assets") ?: "",
                         call.argument<String>("config") ?: ""
                     )
-                    result.success(true)
+                    true
                 }
                 "prepare" -> {
                     val intent = VpnService.prepare(appContext)
@@ -119,6 +170,11 @@ object PvxrayPlugin : MethodChannel.MethodCallHandler {
                 else -> result.notImplemented()
             }
         } catch (t: Throwable) {
+            // A failed foreground-service launch must not leave pendingStart
+            // permanently occupied, otherwise every retry reports busy.
+            if (pendingStart === result) pendingStart = null
+            if (pendingStop === result) pendingStop = null
+            if (pendingPrepare === result) pendingPrepare = null
             result.error("core-error", t.message ?: t.javaClass.simpleName, null)
         }
     }

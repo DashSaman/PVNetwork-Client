@@ -20,6 +20,14 @@ Map<String, dynamic> parse(PVProfile p) => jsonDecode(const XrayConfigBuilder().
 void main() {
   const builder = XrayConfigBuilder();
 
+  test('never exposes an unauthenticated localhost HTTP proxy', () {
+    final cfg = parse(profile('trojan://pw@t.example.com:443'));
+    final inbounds = (cfg['inbounds'] as List).cast<Map>();
+    expect(inbounds.where((inbound) => inbound['protocol'] == 'http'), isEmpty);
+    final rules = (cfg['routing']['rules'] as List).cast<Map>();
+    expect(rules.any((rule) => (rule['inboundTag'] as List?)?.contains('health-in') == true), isFalse);
+  });
+
   test('VLESS REALITY outbound + stream settings', () {
     final cfg = parse(profile(
       'vless://uuid@h.example.com:443?security=reality&sni=www.example.com&pbk=PUBKEY&sid=ab&fp=chrome&type=grpc&serviceName=gun',
@@ -33,6 +41,30 @@ void main() {
     expect(stream['realitySettings']['serverName'], 'www.example.com');
     expect(stream['realitySettings']['password'], 'PUBKEY');
     expect(stream['realitySettings']['shortId'], 'ab');
+  });
+
+  test('public unencrypted VLESS cannot silently become an unsafe tunnel', () {
+    expect(
+      () => parse(profile('vless://uuid@203.0.113.7:443?security=none')),
+      throwsFormatException,
+    );
+    expect(
+      () => parse(profile('vless://uuid@vpn.example.com:443?security=none')),
+      throwsFormatException,
+    );
+    final local = parse(profile('vless://uuid@192.168.1.1:443?security=none'));
+    expect(local['outbounds'].first['protocol'], 'vless');
+    final localV6 = parse(profile('vless://uuid@[fd00::1]:443?security=none'));
+    expect(localV6['outbounds'].first['protocol'], 'vless');
+    final encrypted = parse(profile('vless://uuid@vpn.example.com:443?security=none&encryption=mlkem768x25519plus.native.test'));
+    expect(encrypted['outbounds'].first['settings']['encryption'], isNot('none'));
+  });
+
+  test('XTLS flow without TLS, REALITY or VLESS encryption is refused', () {
+    expect(
+      () => parse(profile('vless://uuid@10.0.0.10:80?flow=xtls-rprx-vision&security=none')),
+      throwsFormatException,
+    );
   });
 
   test('VLESS websocket TLS', () {
@@ -92,17 +124,38 @@ void main() {
 
   test('SOCKS outbound with credentials', () {
     final cfg = parse(profile('socks5://user:pass@10.0.0.3:1080'));
-    final server = cfg['outbounds'].first['settings']['servers'].first;
+    final server = cfg['outbounds'].first['settings'];
     expect(cfg['outbounds'].first['protocol'], 'socks');
     expect(server['address'], '10.0.0.3');
     expect(server['port'], 1080);
-    expect(server['users'].first['user'], 'user');
+    expect(server['user'], 'user');
+    expect(server['pass'], 'pass');
+  });
+
+  test('SOCKS password containing colons is preserved', () {
+    final cfg = parse(profile('socks5://user:long%3Apassword%3Awith%3Acolons@192.168.1.3:1080'));
+    final settings = cfg['outbounds'].first['settings'];
+    expect(settings['user'], 'user');
+    expect(settings['pass'], 'long:password:with:colons');
+  });
+
+  test('public unencrypted HTTP proxy is refused by default', () {
+    expect(
+      () => parse(profile('http://user:pw@proxy.example.com:3128')),
+      throwsFormatException,
+    );
+    final local = parse(profile('http://user:pw@192.168.1.8:3128'));
+    expect(local['outbounds'].first['settings']['port'], 3128);
   });
 
   test('HTTP(S) proxy outbound', () {
     final cfg = parse(profile('https://user:pw@corp.example.com:3128'));
     final out = cfg['outbounds'].first;
     expect(out['protocol'], 'http');
+    expect(out['settings']['address'], 'corp.example.com');
+    expect(out['settings']['user'], 'user');
+    expect(out['settings']['pass'], 'pw');
+    expect(out['settings'].containsKey('servers'), isFalse);
     expect(out['streamSettings']['security'], 'tls');
   });
 

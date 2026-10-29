@@ -4,6 +4,14 @@ on:
   push:
     branches: [main]
     paths:
+      - 'core/xray-mobile/**'
+      - 'universal/**'
+      - 'scripts/**'
+      - '.github/workflows/universal-release.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'core/xray-mobile/**'
       - 'universal/**'
       - 'scripts/**'
       - '.github/workflows/universal-release.yml'
@@ -15,11 +23,38 @@ permissions:
 
 concurrency:
   group: pvnetwork-universal-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  xray_config_contract:
+    name: Pinned Xray / Flutter config contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.0'
+          cache: false
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.4'
+          channel: stable
+          cache: true
+      - name: Generate seven synthetic Flutter client configs
+        working-directory: universal
+        run: |
+          flutter pub get
+          dart run tool/export_xray_fixtures.dart ../core/xray-mobile/config-fixtures
+          test "$(find ../core/xray-mobile/config-fixtures -name '*.json' | wc -l)" -eq 8
+      - name: Validate configs with pinned Xray
+        working-directory: core/xray-mobile
+        run: |
+          go mod tidy
+          PV_REQUIRE_XRAY_FIXTURES=1 go test ./pvxray -run 'Test(PVNetworkGeneratedConfigsAgainstPinnedCore|DartGeneratedVlessHasRealLocalHandshakeAndDataPath)' -v
+
   android:
     name: Android APK
+    needs: xray_config_contract
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,31 +62,51 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.0'
+          cache: false
       - uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.47.4'
           channel: stable
           cache: true
-      - name: Resolve latest core AAR run
-        id: aar_run
-        env:
-          GH_TOKEN: ${{ github.token }}
+      # Build the native core from THIS checkout, never the "latest green"
+      # artifact belonging to a possibly different commit or dependency.
+      - name: Install Android native toolchain
         run: |
-          RID=$(gh run list -R "$GITHUB_REPOSITORY" --workflow xray-mobile-ci.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')
-          echo "run_id=$RID" >> "$GITHUB_OUTPUT"
-      - name: Fetch pvxray AAR
-        if: steps.aar_run.outputs.run_id != ''
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        with:
-          name: pvnetwork-xray-android-aar
-          path: core/xray-mobile/dist
-          run-id: ${{ steps.aar_run.outputs.run_id }}
-          github-token: ${{ github.token }}
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0' 'ndk;29.0.14206865'
+      - name: Build and test checkout-matched pvxray AAR
+        working-directory: core/xray-mobile
+        run: |
+          go get -tool golang.org/x/mobile/cmd/gobind@v0.0.0-20260709172247-6129f5bee9d5
+          go mod tidy
+          go test ./...
+          go install golang.org/x/mobile/cmd/gomobile@v0.0.0-20260709172247-6129f5bee9d5
+          go install golang.org/x/mobile/cmd/gobind@v0.0.0-20260709172247-6129f5bee9d5
+          export PATH="$(go env GOPATH)/bin:$PATH"
+          export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/29.0.14206865"
+          gomobile init
+          mkdir -p dist
+          gomobile bind -v -target=android -androidapi 24 -trimpath -ldflags='-s -w -buildid= -checklinkname=0' -o dist/pvxray.aar ./pvxray
+          sha256sum dist/pvxray.aar > dist/SHA256SUMS.txt
+      - name: Verify mandatory AAR and binding class
+        run: |
+          test -s core/xray-mobile/dist/pvxray.aar
+          (cd core/xray-mobile && sha256sum -c dist/SHA256SUMS.txt)
+          unzip -p core/xray-mobile/dist/pvxray.aar classes.jar > /tmp/pvxray-classes.jar
+          jar tf /tmp/pvxray-classes.jar | grep -Fx 'pvxray/Pvxray.class'
+          # Native ABI is part of the application contract, not an optional
+          # separately downloaded artifact.
+          echo "Core source commit: $GITHUB_SHA"
+          cat core/xray-mobile/dist/SHA256SUMS.txt
       - name: Generate Android host
         run: |
           mkdir -p buildhost
           cp -R universal/lib buildhost/lib
           cp -R universal/test buildhost/test
+          cp -R universal/tool buildhost/tool
           cp universal/pubspec.yaml buildhost/pubspec.yaml
           TARGET=buildhost scripts/setup_host_projects.sh android
           sed -i 's/android:label="vpn"/android:label="PVNetwork"/' buildhost/android/app/src/main/AndroidManifest.xml
@@ -61,7 +116,18 @@ jobs:
           flutter pub get
           flutter analyze
           flutter test
+          # Generate real PVNetwork Dart client configs and reject any sample
+          # that the exact pinned native Xray core cannot parse.
+          dart run tool/export_xray_fixtures.dart ../core/xray-mobile/config-fixtures
+          (cd ../core/xray-mobile && PV_REQUIRE_XRAY_FIXTURES=1 go test ./pvxray -run 'Test(PVNetworkGeneratedConfigsAgainstPinnedCore|DartGeneratedVlessHasRealLocalHandshakeAndDataPath)' -v)
           flutter build apk --release
+          unzip -l build/app/outputs/flutter-apk/app-release.apk | grep -E 'lib/arm64-v8a/libgojni[.]so'
+      - name: Build test-only native Android instrumentation artifacts
+        working-directory: buildhost/android
+        run: |
+          ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon
+          test -s app/build/outputs/apk/debug/app-debug.apk
+          test -s app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
       - name: Package
         run: |
           mkdir -p dist
@@ -71,6 +137,43 @@ jobs:
           name: pvnetwork-android-dev
           path: dist/PVNetwork-Android-dev.apk
           if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pvnetwork-android-native-test
+          path: |
+            buildhost/android/app/build/outputs/apk/debug/app-debug.apk
+            buildhost/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+          if-no-files-found: error
+
+  android_emulator_smoke:
+    name: Android emulator launch smoke (not VPN E2E)
+    needs: android
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: pvnetwork-android-dev
+          path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: pvnetwork-android-native-test
+          path: dist/androidTest
+      - name: Enable KVM for emulator runner
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Install and smoke-test actual Android APK
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: '35'
+          target: google_apis
+          arch: x86_64
+          emulator-boot-timeout: 600
+          script: |
+            bash scripts/android_emulator_smoke.sh dist/PVNetwork-Android-dev.apk
+            bash scripts/android_emulator_vpn_tun_test.sh dist/androidTest/debug/app-debug.apk dist/androidTest/androidTest/debug/app-debug-androidTest.apk
 
   windows:
     name: Windows x64

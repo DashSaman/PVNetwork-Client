@@ -1,6 +1,4 @@
-import 'dart:io';
-
-import 'package:file_picker/file_picker.dart';
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -77,17 +75,21 @@ Future<void> importClipboard(BuildContext context, PVController controller) asyn
 
 Future<void> importFile(BuildContext context, PVController controller) async {
   try {
-    final picked = await FilePicker.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: const ['ovpn', 'conf', 'json', 'yaml', 'yml', 'txt'],
-    );
-    if (picked == null || picked.files.isEmpty) return;
-    final file = picked.files.single;
-    final path = file.path;
-    if (path == null || path.isEmpty) throw const FormatException('The selected file path is unavailable.');
-    final raw = await File(path).readAsString();
+    // Read XFile bytes from the selected document provider, rather than
+    // assuming a filesystem path exists (Android SAF/iCloud/cloud drives).
+    final picked = await openFile();
+    if (picked == null) return;
+    const extensions = <String>{'ovpn', 'conf', 'json', 'yaml', 'yml', 'txt'};
+    final extension = picked.name.split('.').last.toLowerCase();
+    if (!extensions.contains(extension)) {
+      throw const FormatException('Unsupported file format. Select .ovpn, .conf, .json, .yaml, .yml or .txt.');
+    }
+    if (await picked.length() > 2 * 1024 * 1024) {
+      throw const FormatException('Configuration file exceeds the 2 MiB import limit.');
+    }
+    final raw = await picked.readAsString();
     if (raw.trim().isEmpty) throw const FormatException('The selected file is empty or unreadable.');
-    await controller.addRaw(raw, source: 'file:${file.extension ?? 'unknown'}');
+    await controller.addRaw(raw, source: 'file:$extension');
     if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('File imported.')));
   } catch (error) {
     if (context.mounted) _error(context, error);

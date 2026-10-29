@@ -2,6 +2,7 @@ import 'dart:async';
 
 import '../model/pv_profile.dart';
 import '../storage/profile_repository.dart';
+import '../security/safe_error.dart';
 import 'vpn_core_adapter.dart';
 import 'xray_config_builder.dart';
 import 'xray_mobile_binding.dart';
@@ -25,6 +26,9 @@ class XrayAdapter implements VpnCoreAdapter {
   VpnConnectionState _state = VpnConnectionState.disconnected;
   DateTime? _startedAt;
   int? _lastLatencyMs;
+  DateTime? _lastLatencyProbeAt;
+  Future<int>? _latencyProbe;
+  int _latencyEpoch = 0;
   String? _lastError;
 
   /// Control endpoint used by the host UI (generate_204 probe).
@@ -82,14 +86,14 @@ class XrayAdapter implements VpnCoreAdapter {
       if (missing.isNotEmpty) issues.add('Protocol(s) not supported by Xray: ${missing.join(', ')}.');
     }
     try {
-      final config = _builder.build(profile);
+      final config = _builder.build(await normalizeProfile(profile));
       if (!await _binding.validateConfig(config)) {
         issues.add('Xray rejected the generated configuration.');
       }
     } on FormatException catch (e) {
-      issues.add(e.message);
+      issues.add(sanitizeVpnText(e.message));
     } catch (e) {
-      issues.add('Validation failed: $e');
+      issues.add('Validation failed: ${safeVpnError(e)}');
     }
     return issues;
   }
@@ -107,16 +111,41 @@ class XrayAdapter implements VpnCoreAdapter {
   Future<void> start(PVProfile profile) async {
     if (_state == VpnConnectionState.connecting || _state == VpnConnectionState.connected) return;
     _lastError = null;
+    ++_latencyEpoch;
+    _lastLatencyMs = null;
+    _lastLatencyProbeAt = null;
+    _latencyProbe = null;
     _transition(VpnConnectionState.connecting);
     try {
       final resolved = await normalizeProfile(profile);
       final config = _builder.build(resolved);
       await _binding.start(config);
+      if (!await _binding.isRunning()) {
+        throw StateError('Native core did not confirm it is running.');
+      }
       _startedAt = DateTime.now();
-      await _binding.resetStats();
+      // Stats are optional instrumentation: a failed counter reset must not
+      // tear down an otherwise running VPN or create an optimistic error.
+      try {
+        await _binding.resetStats();
+      } catch (_) {
+        // A later statistics poll will report unknown counters.
+      }
       _transition(VpnConnectionState.connected);
     } catch (e) {
-      _lastError = e.toString();
+      // Native startup may have partially established a tunnel before the
+      // binding threw; always attempt cleanup before making an error visible.
+      try {
+        await _binding.stop();
+      } catch (_) {
+        // The caller must retry stop if the platform still owns a tunnel.
+      }
+      _startedAt = null;
+      ++_latencyEpoch;
+      _lastLatencyMs = null;
+      _lastLatencyProbeAt = null;
+      _latencyProbe = null;
+      _lastError = safeVpnError(e);
       _transition(VpnConnectionState.error, message: _lastError);
       rethrow;
     }
@@ -126,11 +155,18 @@ class XrayAdapter implements VpnCoreAdapter {
   Future<void> stop() async {
     if (_state == VpnConnectionState.disconnected) return;
     _transition(VpnConnectionState.disconnecting);
+    ++_latencyEpoch;
+    _lastLatencyMs = null;
+    _lastLatencyProbeAt = null;
+    _latencyProbe = null;
     try {
       await _binding.stop();
-    } finally {
       _startedAt = null;
       _transition(VpnConnectionState.disconnected);
+    } catch (e) {
+      _lastError = 'Unable to stop the native VPN core.';
+      _transition(VpnConnectionState.error, message: _lastError);
+      rethrow;
     }
   }
 
@@ -140,12 +176,44 @@ class XrayAdapter implements VpnCoreAdapter {
     await start(profile);
   }
 
-  /// Measures the live proxy latency through the running core. Returns -1
-  /// when the core is down or the probe fails.
+  /// Measures actual HTTPS through the active Xray outbound. This is not an
+  /// unauthenticated localhost listener or a "ping" to the upstream server.
   Future<int> measureDelay() async => _binding.measureDelay(probeUrl);
 
+  /// Traffic statistics update every 3s. Limit HTTPS probes to one each 30s
+  /// and coalesce concurrent polling to conserve battery and prevent extra
+  /// upstream traffic after a foreground/background transition.
+  Future<int> _latencyForStatistics() async {
+    final pending = _latencyProbe;
+    if (pending != null) return pending;
+    final last = _lastLatencyProbeAt;
+    if (last != null &&
+        DateTime.now().difference(last) < const Duration(seconds: 30)) {
+      return _lastLatencyMs ?? -1;
+    }
+    final epoch = _latencyEpoch;
+    final future = measureDelay();
+    _latencyProbe = future;
+    try {
+      final latency = await future;
+      if (epoch == _latencyEpoch) {
+        _lastLatencyMs = latency;
+        _lastLatencyProbeAt = DateTime.now();
+      }
+      return epoch == _latencyEpoch ? latency : -1;
+    } catch (_) {
+      if (epoch == _latencyEpoch) {
+        _lastLatencyMs = -1;
+        _lastLatencyProbeAt = DateTime.now();
+      }
+      return -1;
+    } finally {
+      if (identical(_latencyProbe, future)) _latencyProbe = null;
+    }
+  }
+
   @override
-  Future<bool> healthCheck() async => await measureDelay() > 0;
+  Future<bool> healthCheck() => _binding.isRunning();
 
   @override
   Future<VpnConnectionState> getState() async {
@@ -158,12 +226,12 @@ class XrayAdapter implements VpnCoreAdapter {
 
   @override
   Future<VpnCoreStatistics> getStatistics() async {
-    final latency = _lastLatencyMs = await measureDelay();
+    final latency = await _latencyForStatistics();
     return VpnCoreStatistics(
       uploadBytes: await _binding.queryUplink(),
       downloadBytes: await _binding.queryDownlink(),
       startedAt: _startedAt,
-      latencyMs: latency,
+      latencyMs: latency > 0 ? latency : null,
     );
   }
 

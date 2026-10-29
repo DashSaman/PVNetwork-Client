@@ -1,74 +1,48 @@
 package com.pvnetwork.vpn
 
+import pvxray.Pvxray
+
 /**
- * Reflective bridge to the gomobile-generated `Pvxray` API bundled inside
- * `libs/pvxray.aar`.
+ * Type-checked bridge to the gomobile AAR produced from this checkout.
  *
- * Reflection (instead of a compile-time import) keeps the host app buildable
- * even when the AAR artifact is absent (desktop/dev builds, fresh CI hosts).
- * When the class cannot be resolved, [available] is false and every call
- * reports an error so the Dart layer degrades gracefully.
+ * The generated class is `pvxray.Pvxray` (confirmed by Android CI
+ * 40425906428). Direct Java linkage prevents stale guessed package strings
+ * from silently compiling an APK that can never connect.
+ *
+ * Android builds MUST include the AAR; desktop platforms use their own
+ * runtime adapter and do not compile this Kotlin source.
  */
 object PvxrayBridge {
-    // gomobile derives the Java package from the Go import path
-    // github.com/pvnetwork/xray-mobile/pvxray (dashes become underscores).
-    private val candidates = listOf(
-        "github.com.pvnetwork.xray_mobile.pvxray.Pvxray",
-        "github.pvnetwork.xray_mobile.pvxray.Pvxray",
-        "com.pvnetwork.xray_mobile.pvxray.Pvxray"
-    )
-
-    private val cls: Class<*>? = candidates.firstNotNullOfOrNull { name ->
-        try {
-            Class.forName(name)
-        } catch (_: Throwable) {
-            null
-        }
-    }
-
     val available: Boolean
-        get() = cls != null
+        get() = true
 
-    private fun call(method: String, vararg args: Any?): Any? {
-        val target = cls ?: throw IllegalStateException("pvxray core is not bundled in this build")
-        val m = target.declaredMethods.firstOrNull { it.name == method && it.parameterCount == args.size }
-            ?: throw IllegalStateException("pvxray method not found: $method/${args.size}")
-        return try {
-            m.invoke(null, *args)
-        } catch (e: java.lang.reflect.InvocationTargetException) {
-            throw (e.cause ?: e)
-        }
-    }
+    fun version(): String = Pvxray.version()
 
-    fun version(): String = call("version")?.toString() ?: ""
-
-    /** @throws Throwable when the config is rejected by the core. */
     fun validate(config: String) {
-        call("validateConfig", config)
+        Pvxray.validateConfig(config)
     }
 
-    /** @throws Throwable when the core fails to start. */
     fun start(config: String, tunFd: Int) {
-        call("start", config, tunFd.toLong())
+        Pvxray.start(config, tunFd.toLong())
     }
 
     fun stop() {
-        call("stop")
+        Pvxray.stop()
     }
 
-    fun isRunning(): Boolean = call("isRunning") as? Boolean ?: false
+    fun isRunning(): Boolean = Pvxray.isRunning()
 
-    fun queryUplink(): Long = (call("queryUplink") as? Number)?.toLong() ?: 0L
+    fun queryUplink(): Long = Pvxray.queryUplink()
 
-    fun queryDownlink(): Long = (call("queryDownlink") as? Number)?.toLong() ?: 0L
+    fun queryDownlink(): Long = Pvxray.queryDownlink()
 
     fun resetStats() {
-        call("resetStats")
+        Pvxray.resetStats()
     }
 
-    fun measureDelay(url: String): Long = (call("measureDelay", url) as? Number)?.toLong() ?: -1L
+    fun measureDelay(url: String): Long = Pvxray.measureDelay(url)
 
     fun initEnvironment(assets: String, configDir: String) {
-        call("initEnvironment", assets, configDir)
+        Pvxray.initEnvironment(assets, configDir)
     }
 }

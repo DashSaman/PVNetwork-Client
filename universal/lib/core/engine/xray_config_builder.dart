@@ -10,8 +10,6 @@ import '../model/pv_profile.dart';
 class XrayConfigBuilder {
   const XrayConfigBuilder();
 
-  static const healthPort = 19670;
-
   /// Protocols this builder can generate real configs for.
   static const Set<String> supportedProtocols = <String>{
     'vless',
@@ -65,7 +63,6 @@ class XrayConfigBuilder {
           'settings': {'mtu': 1500, 'userLevel': 0},
           'sniffing': {'enabled': true, 'destOverride': ['http', 'tls']},
         },
-        {'tag': 'health-in', 'listen': '127.0.0.1', 'port': healthPort, 'protocol': 'http', 'settings': {}},
       ],
       'outbounds': [
         _outbound(p),
@@ -102,10 +99,25 @@ class XrayConfigBuilder {
     final id = Uri.decodeComponent(u.userInfo);
     if (u.host.isEmpty || !u.hasPort || id.isEmpty) throw const FormatException('Incomplete VLESS profile.');
     final security = (q['security'] ?? 'none').toLowerCase();
+    final encryption = q['encryption'] ?? 'none';
+    // Upstream Xray requires transport security for public VLESS endpoints
+    // unless VLESS Encryption is explicitly enabled. A syntactically valid
+    // config is not necessarily a secure or usable connection.
+    if (security == 'none' && encryption == 'none' &&
+        !_isPrivateHost(u.host)) {
+      throw const FormatException(
+        'Unencrypted VLESS to a public server is refused. Use TLS, REALITY, '
+        'or matching VLESS Encryption configured by your provider.');
+    }
+    if ((q['flow'] ?? '').isNotEmpty && security == 'none' &&
+        encryption == 'none') {
+      throw const FormatException(
+        'XTLS flow requires a compatible secure VLESS configuration.');
+    }
     return {
       'tag': 'proxy',
       'protocol': 'vless',
-      'settings': {'address': u.host, 'port': u.port, 'id': id, 'encryption': q['encryption'] ?? 'none', if ((q['flow'] ?? '').isNotEmpty) 'flow': q['flow'], 'level': 0},
+      'settings': {'address': u.host, 'port': u.port, 'id': id, 'encryption': encryption, if ((q['flow'] ?? '').isNotEmpty) 'flow': q['flow'], 'level': 0},
       'streamSettings': _stream(u, security),
     };
   }
@@ -213,48 +225,64 @@ class XrayConfigBuilder {
   }
 
   Map<String, dynamic> _socks(Uri u) {
-    if (u.host.isEmpty || !u.hasPort) throw const FormatException('Incomplete SOCKS profile.');
-    final user = Uri.decodeComponent(u.userInfo.split(':').first);
-    final pass = u.userInfo.contains(':') ? Uri.decodeComponent(u.userInfo.split(':').last) : '';
+    if (u.host.isEmpty || !u.hasPort || u.port < 1 || u.port > 65535) {
+      throw const FormatException('Incomplete SOCKS profile.');
+    }
+    // Preserve colons inside passwords, including percent-encoded colons.
+    final colon = u.userInfo.indexOf(':');
+    final user = Uri.decodeComponent(
+      colon < 0 ? u.userInfo : u.userInfo.substring(0, colon),
+    );
+    final pass = colon < 0
+        ? ''
+        : Uri.decodeComponent(u.userInfo.substring(colon + 1));
     return {
       'tag': 'proxy',
       'protocol': 'socks',
+      // Flat outbound contract in the pinned Xray family: not legacy servers.
       'settings': {
-        'servers': [
-          {
-            'address': u.host,
-            'port': u.port,
-            if (user.isNotEmpty)
-              'users': [
-                {'user': user, 'pass': pass, 'level': 0},
-              ],
-          },
-        ],
+        'address': u.host,
+        'port': u.port,
+        if (user.isNotEmpty) 'user': user,
+        if (user.isNotEmpty) 'pass': pass,
+        'level': 0,
       },
       'streamSettings': {'method': 'raw', 'security': 'none'},
     };
   }
 
   Map<String, dynamic> _httpOutbound(Uri u) {
-    if (u.host.isEmpty || !u.hasPort) throw const FormatException('Incomplete HTTP proxy profile.');
-    final user = Uri.decodeComponent(u.userInfo.split(':').first);
-    final pass = u.userInfo.contains(':') ? Uri.decodeComponent(u.userInfo.split(':').last) : '';
+    if (u.host.isEmpty || !u.hasPort || u.port < 1 || u.port > 65535) {
+      throw const FormatException('Incomplete HTTP proxy profile.');
+    }
+    final colon = u.userInfo.indexOf(':');
+    final user = Uri.decodeComponent(
+      colon < 0 ? u.userInfo : u.userInfo.substring(0, colon),
+    );
+    final pass = colon < 0
+        ? ''
+        : Uri.decodeComponent(u.userInfo.substring(colon + 1));
+    if (u.scheme == 'http' && !_isPrivateHost(u.host)) {
+      throw const FormatException(
+        'Plain HTTP proxy to a public host is not encrypted. '
+        'Use HTTPS proxy or a trusted private-network endpoint.');
+    }
     return {
       'tag': 'proxy',
       'protocol': 'http',
       'settings': {
-        'servers': [
-          {
-            'address': u.host,
-            'port': u.port,
-            if (user.isNotEmpty)
-              'users': [
-                {'user': user, 'pass': pass, 'level': 0},
-              ],
-          },
-        ],
+        'address': u.host,
+        'port': u.port,
+        if (user.isNotEmpty) 'user': user,
+        if (user.isNotEmpty) 'pass': pass,
+        'level': 0,
       },
-      'streamSettings': {'method': 'raw', 'security': u.scheme == 'https' ? 'tls' : 'none'},
+      'streamSettings': {
+        'method': 'raw',
+        'security': u.scheme == 'https' ? 'tls' : 'none',
+        if (u.scheme == 'https')
+          'tlsSettings': {'serverName': u.host},
+      },
     };
   }
 
@@ -303,7 +331,6 @@ class XrayConfigBuilder {
 
   Map<String, dynamic> _routingBlock(String? routingPolicy, bool dnsOn) {
     final rules = <Map<String, dynamic>>[
-      {'type': 'field', 'inboundTag': ['health-in'], 'outboundTag': 'proxy'},
       if (dnsOn)
         {'type': 'field', 'port': 53, 'inboundTag': ['tun-in'], 'outboundTag': 'dns-out'},
       {'type': 'field', 'ip': privateCidrs, 'outboundTag': 'direct'},
@@ -324,6 +351,28 @@ class XrayConfigBuilder {
       'off' || 'disabled' => 'off',
       _ => 'secure',
     };
+  }
+
+  static bool _isPrivateHost(String host) {
+    final normalized = host.toLowerCase();
+    if (normalized == 'localhost' || normalized == '::1') return true;
+    if (normalized.startsWith('fc') || normalized.startsWith('fd') ||
+        normalized.startsWith('fe80:')) {
+      // Restrict IPv6 prefix handling to literal addresses, not hostnames.
+      if (normalized.contains(':')) return true;
+    }
+    final pieces = host.split('.');
+    if (pieces.length != 4) return false;
+    final bytes = pieces.map(int.tryParse).toList();
+    if (bytes.any((value) => value == null || value < 0 || value > 255)) {
+      return false;
+    }
+    final first = bytes[0]!;
+    final second = bytes[1]!;
+    return first == 10 || first == 127 ||
+        (first == 172 && second >= 16 && second <= 31) ||
+        (first == 192 && second == 168) ||
+        (first == 169 && second == 254);
   }
 
   static String _hostOf(String hostPort) {

@@ -57,3 +57,41 @@ Status legend: `[x]` done · `[~]` in progress · `[ ]` open. Update this table 
 - [ ] D3 Ship `geoip.dat`/`geosite.dat` assets for `bypassIR` routing (copy-to-app-data + `InitEnvironment` wiring)
 - [ ] D4 Refresh stats latency probe path with `measureDelay` from the UI (manual "test latency" affordance)
 - [ ] D5 Update `docs/PROJECT_STATE.md` + `docs/KNOWN_ISSUES.md` with the run IDs and outcomes; only then update release naming per the release rule
+
+
+### Stage 0 — universal client reliability/security (2026-10-27; PR #1, IN PROGRESS)
+
+- [~] S0-1 Replace broken Android AGP9 file-picker implementation; CI Android APK proof pending.
+- [~] S0-2 Always build required Xray native AAR from exact checkout and verify checksum/class rather than downloading an unrelated CI artifact; current pull-request run pending.
+- [~] S0-3 Prevent app UID outbound VPN loop via `VpnService.Builder.addDisallowedApplication(packageName)`; still requires on-device packet and per-app isolation tests.
+- [~] S0-4 Remove the unauthenticated HTTP proxy previously used to test latency; secure replacement probe pending. UI currently receives latency unavailable (-1), not fake success.
+- [~] S0-5 Protect newly imported raw configuration and subscription URL by encrypted SecretStore references; test added. Existing stored legacy profiles still require explicit safe migration.
+- [~] S0-6 Correct deletion of secret references including legacy namespace and validate resolved config; unit regression added.
+- [ ] S0-7 Android VPN real-device E2E proof: test TUN fd ownership, outbound socket exclusion, DNS/IPv6, link resilience and proper connected/disconnected state.
+- [ ] S0-8 Implement secure latency measurement, controller cancellation while connecting and multi-adapter lifecycle.
+- [ ] S0-9 Merge only after validated release gates and recorded CI/device receipts. PR: https://github.com/DashSaman/PVNetwork-Client/pull/1
+
+Do not promote any Stage 0 item from in-progress to PASS merely because source changed. Details: `docs/audits/2026-10-27-ANDROID-DEFECTS.md` and `docs/product/PVNETWORK_UNIVERSAL_FEATURE_MASTER_2026-10-27.md`.
+
+
+### Continuation milestone — Stage 1 lifecycle and bridge (PR #1)
+
+- [~] S1-1 Compile-time native `pvxray.Pvxray` binding replacing guess-based reflective loader; latest Android CI not yet verified.
+- [x] S1-2 Controller event-generation/serialized-operation implementation and regression unit tests committed; host Linux tests passed at intermediate CI `40428100913` (separate latest-commit recheck pending).
+- [~] S1-3 UI Cancel while connecting plus pending MethodChannel start callback cleanup; native hard timeout and device checks pending.
+- [~] S1-4 Idempotent old-profile secret migration with regression tests; a real installed-app upgrade and corrupted-store recovery check pending.
+- [ ] S1-5 Secure native latency probe without localhost open proxy.
+- [ ] S1-6 End-to-end real VPN on Android; 24-case test matrix: `docs/ANDROID_REAL_DEVICE_ACCEPTANCE_2026-10-27.md`.
+- [ ] S1-7 Release gate: latest exact-SHA green CI + native APK package integrity + successful physical-device traffic/DNS/cleanup validation.
+
+**Never report a full feature PASS based only on source commits or the green old-sha CI receipt.**
+
+### Stage 2 resume pointer — 2026-10-27
+
+Authoritative latest technical handoff: `docs/CHECKPOINT_2026-10-27_STAGE2_NATIVE_LIFECYCLE.md`.
+
+- Stage-0/early Stage-1 source builds have an exact-SHA five-job PASS receipt (`40429012502`); initial native worker start design also passed (`40431948797`).
+- Later Stage-2 source changes require a **new exact-head** CI PASS, including the newly added Android emulator smoke job. In-progress/cancelled runs are not passes.
+- Native service start/stop now run on serial background worker; native Stop completion waits for worker cleanup; false DISCONNECTED is blocked; legacy credentials and active profile deletion guards have regression tests.
+- Latest change includes Android emulator boot/startup smoke. This does **not** validate a working VPN; the full 24-case device acceptance remains open.
+- Exact next action: inspect latest PR CI logs, fix any errors, and then test real-device VPN egress/DNS/IPv6/FD lifecycle with an authorized disposable endpoint. Do not merge this draft PR based solely on compiler success.

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vpn/controller.dart';
 import 'package:vpn/core/engine/vpn_core_adapter.dart';
@@ -12,6 +14,12 @@ class FakeBinding implements XrayMobileBinding {
   bool available = true;
   int startCalls = 0;
   int stopCalls = 0;
+  int? simulatedLatency;
+  int delayProbeCalls = 0;
+  Completer<int>? pendingDelay;
+  bool failAfterStart = false;
+  bool failStop = false;
+  bool failResetStats = false;
 
   @override
   String get bindingId => 'fake';
@@ -33,11 +41,13 @@ class FakeBinding implements XrayMobileBinding {
     if (!available) throw StateError('native core missing');
     startCalls++;
     started = true;
+    if (failAfterStart) throw StateError('partially initialized');
   }
 
   @override
   Future<void> stop() async {
     stopCalls++;
+    if (failStop) throw StateError('native stop failed');
     started = false;
   }
 
@@ -51,10 +61,17 @@ class FakeBinding implements XrayMobileBinding {
   Future<int> queryDownlink() async => started ? 900 : 0;
 
   @override
-  Future<void> resetStats() async {}
+  Future<void> resetStats() async {
+    if (failResetStats) throw StateError('stats unavailable');
+  }
 
   @override
-  Future<int> measureDelay(String url) async => started ? 42 : -1;
+  Future<int> measureDelay(String url) async {
+    delayProbeCalls++;
+    final delayed = pendingDelay;
+    if (delayed != null) return delayed.future;
+    return started ? (simulatedLatency ?? 42) : -1;
+  }
 
   @override
   Future<void> initEnvironment(String assetLocation, String configLocation) async {}
@@ -121,6 +138,97 @@ void main() {
     expect(events, contains(VpnConnectionState.connected));
     expect(events, contains(VpnConnectionState.disconnected));
     await sub.cancel();
+    await adapter.dispose();
+  });
+
+  test('stats polling coalesces core HTTPS probe to at most once per 30 seconds', () async {
+    final binding = FakeBinding();
+    final adapter = xrayAdapterForTest(binding);
+    await adapter.start(vlessProfile());
+    for (var i = 0; i < 5; i++) {
+      final stats = await adapter.getStatistics();
+      expect(stats.latencyMs, 42);
+    }
+    expect(binding.delayProbeCalls, 1,
+        reason: '3-second stats refreshes must not generate 3-second HTTPS probes');
+    await adapter.stop();
+    await adapter.start(vlessProfile());
+    await adapter.getStatistics();
+    expect(binding.delayProbeCalls, 2,
+        reason: 'a new VPN session must measure fresh outbound latency');
+    await adapter.stop();
+    await adapter.dispose();
+  });
+
+  test('a slow probe from a previous VPN session never certifies the next', () async {
+    final oldDelay = Completer<int>();
+    final binding = FakeBinding()..pendingDelay = oldDelay;
+    final adapter = xrayAdapterForTest(binding);
+    await adapter.start(vlessProfile());
+    final previous = adapter.getStatistics();
+    await Future<void>.delayed(Duration.zero);
+    expect(binding.delayProbeCalls, 1);
+
+    await adapter.stop();
+    binding.pendingDelay = null;
+    await adapter.start(vlessProfile());
+    final fresh = await adapter.getStatistics();
+    expect(fresh.latencyMs, 42);
+    expect(binding.delayProbeCalls, 2);
+
+    oldDelay.complete(100);
+    final expired = await previous;
+    expect(expired.latencyMs, isNull,
+        reason: 'old session cannot publish a verified result');
+    final current = await adapter.getStatistics();
+    expect(current.latencyMs, 42);
+    await adapter.stop();
+    await adapter.dispose();
+  });
+
+  test('native running state is healthy even with unavailable probe delay', () async {
+    final binding = FakeBinding()..simulatedLatency = -1;
+    final adapter = xrayAdapterForTest(binding);
+    await adapter.start(vlessProfile());
+    expect(await adapter.healthCheck(), isTrue);
+    final stats = await adapter.getStatistics();
+    expect(stats.latencyMs, isNull);
+    await adapter.stop();
+    expect(await adapter.healthCheck(), isFalse);
+    await adapter.dispose();
+  });
+
+  test('partial native start failure invokes stop for cleanup', () async {
+    final binding = FakeBinding()..failAfterStart = true;
+    final adapter = xrayAdapterForTest(binding);
+    await expectLater(adapter.start(vlessProfile()), throwsStateError);
+    expect(binding.stopCalls, 1);
+    expect(binding.started, isFalse);
+    expect(adapter.state, VpnConnectionState.error);
+    await adapter.dispose();
+  });
+
+  test('stop failure must not claim disconnected', () async {
+    final binding = FakeBinding();
+    final adapter = xrayAdapterForTest(binding);
+    await adapter.start(vlessProfile());
+    binding.failStop = true;
+    await expectLater(adapter.stop(), throwsStateError);
+    expect(adapter.state, VpnConnectionState.error);
+    expect(binding.started, isTrue);
+    binding.failStop = false;
+    await adapter.stop();
+    expect(adapter.state, VpnConnectionState.disconnected);
+    await adapter.dispose();
+  });
+
+  test('unavailable statistics reset does not break running session', () async {
+    final binding = FakeBinding()..failResetStats = true;
+    final adapter = xrayAdapterForTest(binding);
+    await adapter.start(vlessProfile());
+    expect(binding.started, isTrue);
+    expect(adapter.state, VpnConnectionState.connected);
+    await adapter.stop();
     await adapter.dispose();
   });
 
